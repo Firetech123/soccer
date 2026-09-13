@@ -17,7 +17,7 @@ export default {
     }
 
     const url = new URL(request.url);
-    const kv = env.CHAT_KV || env.KV;
+    const kv = env.firetech || env.KV;
     const key = url.searchParams.get('key') || 'messages';
 
     try {
