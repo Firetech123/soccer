@@ -1,0 +1,110 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Private Chat</title>
+  <link rel="stylesheet" href="style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+</head>
+<body>
+  <div class="app-container">
+    <!-- Auth Screen -->
+    <div id="auth-screen" class="card auth-card">
+      <div class="auth-header">
+        <div class="logo-icon">🔒</div>
+        <h2>Private Chat</h2>
+        <p class="subtitle">Exclusive 2-Person Private Messaging</p>
+      </div>
+
+      <div class="tabs">
+        <button id="tab-login" class="tab-btn active" onclick="switchTab('login')">Login</button>
+        <button id="tab-signup" class="tab-btn" onclick="switchTab('signup')">Sign Up</button>
+      </div>
+
+      <div id="auth-error" class="alert error hidden"></div>
+      <div id="auth-info" class="alert info hidden"></div>
+
+      <!-- Login Form -->
+      <form id="login-form" class="auth-form" onsubmit="handleLogin(event)">
+        <div class="input-group">
+          <label for="login-username">Username</label>
+          <input type="text" id="login-username" placeholder="Enter username" required autocomplete="username">
+        </div>
+        <div class="input-group">
+          <label for="login-password">Password</label>
+          <input type="password" id="login-password" placeholder="Enter password" required autocomplete="current-password">
+        </div>
+        <button type="submit" class="btn primary-btn">Login</button>
+      </form>
+
+      <!-- Signup Form -->
+      <form id="signup-form" class="auth-form hidden" onsubmit="handleSignup(event)">
+        <div class="input-group">
+          <label for="signup-username">Username</label>
+          <input type="text" id="signup-username" placeholder="Choose username" required autocomplete="username">
+        </div>
+        <div class="input-group">
+          <label for="signup-password">Password</label>
+          <input type="password" id="signup-password" placeholder="Choose password" required autocomplete="new-password">
+        </div>
+        <button type="submit" id="signup-submit-btn" class="btn primary-btn">Create Account</button>
+        <p class="account-limit-notice" id="account-limit-notice">Max limit: 2 users total.</p>
+      </form>
+    </div>
+
+    <!-- Chat Screen -->
+    <div id="chat-screen" class="card chat-card hidden">
+      <!-- Chat Header -->
+      <div class="chat-header">
+        <div class="user-info">
+          <div class="avatar" id="current-user-avatar">?</div>
+          <div>
+            <h3 id="current-user-name">User</h3>
+            <span class="status-indicator">
+              <span class="status-dot online"></span> Active
+            </span>
+          </div>
+        </div>
+
+        <div class="peer-status" id="peer-status">
+          <span class="status-dot offline" id="peer-status-dot"></span>
+          <span id="peer-status-text">Peer offline</span>
+        </div>
+
+        <button class="btn secondary-btn logout-btn" onclick="handleLogout()">Logout</button>
+      </div>
+
+      <!-- Chat Messages Container -->
+      <div class="chat-messages" id="chat-messages">
+        <!-- Messages will be populated here dynamically -->
+      </div>
+
+      <!-- Typing Indicator -->
+      <div class="typing-container" id="typing-indicator">
+        <span id="typing-text">Someone is typing...</span>
+        <div class="typing-dots">
+          <span></span><span></span><span></span>
+        </div>
+      </div>
+
+      <!-- Chat Input Area -->
+      <form id="chat-form" class="chat-input-area" onsubmit="handleSendMessage(event)">
+        <input
+          type="text"
+          id="message-input"
+          placeholder="Type a message..."
+          autocomplete="off"
+          oninput="handleTypingInput()"
+        >
+        <button type="submit" class="btn primary-btn send-btn">Send</button>
+      </form>
+    </div>
+  </div>
+
+  <script src="/socket.io/socket.io.js"></script>
+  <script src="app.js"></script>
+</body>
+</html>
