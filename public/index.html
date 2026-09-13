@@ -11,7 +11,31 @@
 </head>
 <body class="dark-theme">
   <div class="app-container">
-    <div id="chat-screen" class="card chat-card">
+    <!-- Name Prompt Screen -->
+    <div id="join-screen" class="card prompt-card">
+      <div class="prompt-header">
+        <div class="logo-icon">💬</div>
+        <h2>Welcome to Chat</h2>
+        <p class="subtitle">Please enter your name to start chatting</p>
+      </div>
+      <form id="join-form" class="prompt-form" onsubmit="handleJoinChat(event)">
+        <div class="input-group">
+          <label for="username-input">Your Name</label>
+          <input
+            type="text"
+            id="username-input"
+            placeholder="Enter your name..."
+            required
+            autocomplete="off"
+            maxlength="25"
+          >
+        </div>
+        <button type="submit" class="btn primary-btn">Join Chat</button>
+      </form>
+    </div>
+
+    <!-- Chat Screen -->
+    <div id="chat-screen" class="card chat-card hidden">
       <!-- Chat Header -->
       <div class="chat-header">
         <div class="user-info">

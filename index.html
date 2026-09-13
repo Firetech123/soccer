@@ -61,6 +61,72 @@
       overflow: hidden;
     }
 
+    /* Prompt Card */
+    .prompt-card {
+      max-width: 400px;
+      margin: auto;
+      height: auto;
+      padding: 32px;
+    }
+
+    .prompt-header {
+      text-align: center;
+      margin-bottom: 24px;
+    }
+
+    .logo-icon {
+      font-size: 44px;
+      margin-bottom: 8px;
+    }
+
+    .prompt-header h2 {
+      font-size: 24px;
+      font-weight: 700;
+    }
+
+    .subtitle {
+      color: var(--text-muted);
+      font-size: 14px;
+      margin-top: 6px;
+    }
+
+    .prompt-form {
+      display: flex;
+      flex-direction: column;
+      gap: 16px;
+    }
+
+    .input-group {
+      display: flex;
+      flex-direction: column;
+      gap: 6px;
+    }
+
+    .input-group label {
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-muted);
+    }
+
+    .input-group input {
+      background-color: var(--input-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      padding: 12px 16px;
+      color: var(--text-main);
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .input-group input:focus {
+      border-color: var(--primary);
+    }
+
+    .hidden {
+      display: none !important;
+    }
+
     /* Chat Card */
     .chat-card {
       height: 620px;
@@ -205,7 +271,31 @@
 </head>
 <body class="dark-theme">
   <div class="app-container">
-    <div id="chat-screen" class="card chat-card">
+    <!-- Name Prompt Screen -->
+    <div id="join-screen" class="card prompt-card">
+      <div class="prompt-header">
+        <div class="logo-icon">💬</div>
+        <h2>Welcome to Chat</h2>
+        <p class="subtitle">Please enter your name to start chatting</p>
+      </div>
+      <form id="join-form" class="prompt-form" onsubmit="handleJoinChat(event)">
+        <div class="input-group">
+          <label for="username-input">Your Name</label>
+          <input
+            type="text"
+            id="username-input"
+            placeholder="Enter your name..."
+            required
+            autocomplete="off"
+            maxlength="25"
+          >
+        </div>
+        <button type="submit" class="btn primary-btn">Join Chat</button>
+      </form>
+    </div>
+
+    <!-- Chat Screen -->
+    <div id="chat-screen" class="card chat-card hidden">
       <!-- Chat Header -->
       <div class="chat-header">
         <div class="user-info">
@@ -239,12 +329,35 @@
 
   <script>
     const WORKER_URL = 'https://dark-surf-6029.firetechsoftware.workers.dev/';
-    const currentUsername = 'Anonymous';
+    let currentUsername = '';
     let localMessages = [];
 
     document.addEventListener('DOMContentLoaded', () => {
-      initChat();
+      const savedName = localStorage.getItem('chat_username');
+      if (savedName && savedName.trim()) {
+        currentUsername = savedName.trim();
+        document.getElementById('join-screen').classList.add('hidden');
+        document.getElementById('chat-screen').classList.remove('hidden');
+        initChat();
+      } else {
+        document.getElementById('username-input').focus();
+      }
     });
+
+    function handleJoinChat(e) {
+      e.preventDefault();
+      const input = document.getElementById('username-input');
+      const name = input.value.trim();
+      if (!name) return;
+
+      currentUsername = name;
+      localStorage.setItem('chat_username', name);
+
+      document.getElementById('join-screen').classList.add('hidden');
+      document.getElementById('chat-screen').classList.remove('hidden');
+
+      initChat();
+    }
 
     async function initChat() {
       await loadMessages();
