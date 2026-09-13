@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Private Chat</title>
+  <title>Real-Time Chat</title>
   <link rel="stylesheet" href="style.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
   <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
@@ -11,49 +11,18 @@
 </head>
 <body class="dark-theme">
   <div class="app-container">
-    <!-- Prompt Screen (Simple Username Entry) -->
-    <div id="prompt-screen" class="card prompt-card">
-      <div class="prompt-header">
-        <div class="logo-icon">💬</div>
-        <h2>Private Chat</h2>
-        <p class="subtitle">Enter your name to start chatting right away</p>
-      </div>
-
-      <div id="join-error" class="alert error hidden"></div>
-
-      <form id="join-form" class="prompt-form" onsubmit="handleJoin(event)">
-        <div class="input-group">
-          <label for="username-input">Your Name</label>
-          <input type="text" id="username-input" placeholder="e.g. Alice" required autocomplete="off" autofocus>
-        </div>
-        <button type="submit" id="join-btn" class="btn primary-btn">Start Chatting</button>
-      </form>
-
-      <div class="server-status" id="server-status">
-        <span class="status-dot online"></span> Cloudflare Backend Connected
-      </div>
-    </div>
-
-    <!-- Main Chat Screen -->
-    <div id="chat-screen" class="card chat-card hidden">
+    <div id="chat-screen" class="card chat-card">
       <!-- Chat Header -->
       <div class="chat-header">
         <div class="user-info">
-          <div class="avatar" id="current-user-avatar">?</div>
+          <div class="avatar">💬</div>
           <div>
-            <h3 id="current-user-name">User</h3>
+            <h3>Anonymous Chat</h3>
             <span class="status-indicator">
-              <span class="status-dot online"></span> Online
+              <span class="status-dot online"></span> Connected
             </span>
           </div>
         </div>
-
-        <div class="peer-status" id="peer-status">
-          <span class="status-dot offline" id="peer-status-dot"></span>
-          <span id="peer-status-text">Peer offline</span>
-        </div>
-
-        <button class="btn secondary-btn logout-btn" onclick="handleLeave()">Leave</button>
       </div>
 
       <!-- Messages Stream -->
@@ -63,7 +32,7 @@
 
       <!-- Real-Time Typing Indicator -->
       <div class="typing-container" id="typing-indicator">
-        <span id="typing-text">Peer is typing...</span>
+        <span id="typing-text">Anonymous is typing...</span>
         <div class="typing-dots">
           <span></span><span></span><span></span>
         </div>
@@ -77,6 +46,7 @@
           placeholder="Type a message..."
           autocomplete="off"
           oninput="handleTypingInput()"
+          onclick="this.focus()"
         >
         <button type="submit" class="btn primary-btn send-btn">Send</button>
       </form>

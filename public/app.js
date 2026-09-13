@@ -1,84 +1,14 @@
 let socket = null;
-let currentUser = null;
 let typingTimeout = null;
 let isTyping = false;
+const currentUsername = 'Anonymous';
 
 document.addEventListener('DOMContentLoaded', () => {
-  const savedUser = localStorage.getItem('chat_simple_username');
-  if (savedUser) {
-    currentUser = { username: savedUser };
-    initChat();
-  }
+  initChat();
 });
 
-function showError(msg) {
-  const errorDiv = document.getElementById('join-error');
-  if (errorDiv) {
-    errorDiv.textContent = msg;
-    errorDiv.classList.remove('hidden');
-  }
-}
-
-function clearError() {
-  const errorDiv = document.getElementById('join-error');
-  if (errorDiv) {
-    errorDiv.classList.add('hidden');
-  }
-}
-
-async function handleJoin(e) {
-  e.preventDefault();
-  clearError();
-
-  const usernameInput = document.getElementById('username-input').value.trim();
-  if (!usernameInput) return;
-
-  try {
-    const res = await fetch('/api/join', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username: usernameInput })
-    });
-
-    const data = await res.json();
-    if (!res.ok) {
-      showError(data.error || 'Unable to join chat');
-      return;
-    }
-
-    currentUser = data.user;
-    localStorage.setItem('chat_simple_username', currentUser.username);
-
-    initChat();
-  } catch (err) {
-    showError('Network error connecting to backend server');
-  }
-}
-
-function handleLeave() {
-  localStorage.removeItem('chat_simple_username');
-  currentUser = null;
-
-  if (socket) {
-    socket.disconnect();
-    socket = null;
-  }
-
-  document.getElementById('chat-screen').classList.add('hidden');
-  document.getElementById('prompt-screen').classList.remove('hidden');
-}
-
 async function initChat() {
-  document.getElementById('prompt-screen').classList.add('hidden');
-  document.getElementById('chat-screen').classList.remove('hidden');
-
-  document.getElementById('current-user-name').textContent = currentUser.username;
-  document.getElementById('current-user-avatar').textContent = currentUser.username.charAt(0);
-
-  // Load Cloudflare KV stored chat history
   await loadMessages();
-
-  // Connect Socket.io real-time connection
   setupSocket();
 }
 
@@ -101,25 +31,11 @@ function setupSocket() {
   if (socket) socket.disconnect();
 
   socket = io({
-    auth: { username: currentUser.username }
+    auth: { username: currentUsername }
   });
 
   socket.on('connect_error', (err) => {
-    console.error('Socket error:', err.message);
-  });
-
-  socket.on('online_users', (users) => {
-    const peerStatusDot = document.getElementById('peer-status-dot');
-    const peerStatusText = document.getElementById('peer-status-text');
-
-    const peerUsers = users.filter(u => u.toLowerCase() !== currentUser.username.toLowerCase());
-    if (peerUsers.length > 0) {
-      peerStatusDot.className = 'status-dot online';
-      peerStatusText.textContent = `${peerUsers[0]} is online`;
-    } else {
-      peerStatusDot.className = 'status-dot offline';
-      peerStatusText.textContent = 'Peer offline';
-    }
+    console.error('Socket connection error:', err.message);
   });
 
   socket.on('new_message', (msg) => {
@@ -128,16 +44,16 @@ function setupSocket() {
   });
 
   socket.on('user_typing', (data) => {
-    if (data.username.toLowerCase() !== currentUser.username.toLowerCase()) {
+    if (data.socketId !== socket.id) {
       const typingIndicator = document.getElementById('typing-indicator');
       const typingText = document.getElementById('typing-text');
-      typingText.textContent = `${data.username} is typing...`;
+      typingText.textContent = `${data.username || 'Anonymous'} is typing...`;
       typingIndicator.classList.add('active');
     }
   });
 
   socket.on('user_stop_typing', (data) => {
-    if (data.username.toLowerCase() !== currentUser.username.toLowerCase()) {
+    if (data.socketId !== socket.id) {
       document.getElementById('typing-indicator').classList.remove('active');
     }
   });
@@ -145,14 +61,15 @@ function setupSocket() {
 
 function appendMessage(msg) {
   const container = document.getElementById('chat-messages');
-  const isSent = msg.sender.toLowerCase() === currentUser.username.toLowerCase();
+  // Compare socket or message sender display
+  const isSent = msg.sender === currentUsername;
 
   const bubble = document.createElement('div');
   bubble.className = `message-bubble ${isSent ? 'sent' : 'received'}`;
 
   const senderDiv = document.createElement('div');
   senderDiv.className = 'message-sender';
-  senderDiv.textContent = isSent ? 'You' : msg.sender;
+  senderDiv.textContent = msg.sender || 'Anonymous';
 
   const textDiv = document.createElement('div');
   textDiv.textContent = msg.text;
