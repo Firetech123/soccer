@@ -1,0 +1,352 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <title>Real-Time Chat</title>
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@400;500;600;700&display=swap" rel="stylesheet">
+  <style>
+    :root {
+      --bg-color: #0b0f19;
+      --card-bg: #151c2c;
+      --card-border: #232d42;
+      --primary: #6366f1;
+      --primary-hover: #4f46e5;
+      --text-main: #f1f5f9;
+      --text-muted: #94a3b8;
+      --input-bg: #0b0f19;
+      --msg-sent: #6366f1;
+      --msg-received: #232d42;
+      --online: #10b981;
+      --offline: #64748b;
+      --error: #ef4444;
+      --error-bg: rgba(239, 68, 68, 0.1);
+    }
+
+    * {
+      box-sizing: border-box;
+      margin: 0;
+      padding: 0;
+      font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
+    }
+
+    body.dark-theme {
+      background-color: var(--bg-color);
+      color: var(--text-main);
+      min-height: 100vh;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      padding: 20px;
+    }
+
+    .app-container {
+      width: 100%;
+      max-width: 800px;
+      height: 620px;
+      display: flex;
+    }
+
+    .card {
+      background-color: var(--card-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 16px;
+      width: 100%;
+      height: 100%;
+      box-shadow: 0 25px 50px -12px rgba(0, 0, 0, 0.6);
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+    }
+
+    /* Chat Card */
+    .chat-card {
+      height: 620px;
+    }
+
+    .chat-header {
+      padding: 16px 24px;
+      border-bottom: 1px solid var(--card-border);
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+    }
+
+    .user-info {
+      display: flex;
+      align-items: center;
+      gap: 12px;
+    }
+
+    .avatar {
+      width: 40px;
+      height: 40px;
+      border-radius: 50%;
+      background-color: var(--primary);
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      font-weight: 700;
+      font-size: 16px;
+      color: #fff;
+      text-transform: uppercase;
+    }
+
+    .status-indicator {
+      font-size: 12px;
+      color: var(--text-muted);
+      display: flex;
+      align-items: center;
+      gap: 6px;
+    }
+
+    .status-dot {
+      width: 8px;
+      height: 8px;
+      border-radius: 50%;
+      display: inline-block;
+    }
+
+    .status-dot.online {
+      background-color: var(--online);
+      box-shadow: 0 0 8px var(--online);
+    }
+
+    .chat-messages {
+      flex: 1;
+      padding: 24px;
+      overflow-y: auto;
+      display: flex;
+      flex-direction: column;
+      gap: 12px;
+    }
+
+    .message-bubble {
+      max-width: 70%;
+      padding: 10px 16px;
+      border-radius: 14px;
+      font-size: 14px;
+      line-height: 1.4;
+      word-break: break-word;
+    }
+
+    .message-bubble.sent {
+      align-self: flex-end;
+      background-color: var(--msg-sent);
+      color: #fff;
+      border-bottom-right-radius: 4px;
+    }
+
+    .message-bubble.received {
+      align-self: flex-start;
+      background-color: var(--msg-received);
+      color: var(--text-main);
+      border-bottom-left-radius: 4px;
+    }
+
+    .message-sender {
+      font-size: 11px;
+      font-weight: 600;
+      margin-bottom: 4px;
+      opacity: 0.8;
+    }
+
+    .message-time {
+      font-size: 10px;
+      opacity: 0.6;
+      margin-top: 4px;
+      text-align: right;
+    }
+
+    .chat-input-area {
+      padding: 16px 24px;
+      border-top: 1px solid var(--card-border);
+      display: flex;
+      gap: 12px;
+    }
+
+    .chat-input-area input {
+      flex: 1;
+      background-color: var(--input-bg);
+      border: 1px solid var(--card-border);
+      border-radius: 8px;
+      padding: 12px 16px;
+      color: var(--text-main);
+      font-size: 14px;
+      outline: none;
+      transition: border-color 0.2s;
+    }
+
+    .chat-input-area input:focus {
+      border-color: var(--primary);
+    }
+
+    .btn {
+      border: none;
+      border-radius: 8px;
+      padding: 12px 20px;
+      font-size: 14px;
+      font-weight: 600;
+      cursor: pointer;
+      transition: background-color 0.2s;
+    }
+
+    .primary-btn {
+      background-color: var(--primary);
+      color: #fff;
+    }
+
+    .primary-btn:hover {
+      background-color: var(--primary-hover);
+    }
+  </style>
+</head>
+<body class="dark-theme">
+  <div class="app-container">
+    <div id="chat-screen" class="card chat-card">
+      <!-- Chat Header -->
+      <div class="chat-header">
+        <div class="user-info">
+          <div class="avatar">💬</div>
+          <div>
+            <h3>Anonymous Chat</h3>
+            <span class="status-indicator">
+              <span class="status-dot online"></span> Connected
+            </span>
+          </div>
+        </div>
+      </div>
+
+      <!-- Messages Stream -->
+      <div class="chat-messages" id="chat-messages">
+        <!-- Messages appended dynamically -->
+      </div>
+
+      <!-- Chat Input Form -->
+      <form id="chat-form" class="chat-input-area" onsubmit="handleSendMessage(event)">
+        <input
+          type="text"
+          id="message-input"
+          placeholder="Type a message..."
+          autocomplete="off"
+        >
+        <button type="submit" class="btn primary-btn send-btn">Send</button>
+      </form>
+    </div>
+  </div>
+
+  <script>
+    const WORKER_URL = 'https://tiny-shadow-c0c8.firetechsoftware.workers.dev/';
+    const currentUsername = 'Anonymous';
+    let localMessages = [];
+
+    document.addEventListener('DOMContentLoaded', () => {
+      initChat();
+    });
+
+    async function initChat() {
+      await loadMessages();
+      // Poll every 3 seconds for new messages
+      setInterval(loadMessages, 3000);
+    }
+
+    async function loadMessages() {
+      try {
+        const res = await fetch(`${WORKER_URL}?key=messages`);
+        if (!res.ok) return;
+
+        let messages = await res.json();
+        if (typeof messages === 'string') {
+          try { messages = JSON.parse(messages); } catch { messages = []; }
+        }
+        if (!Array.isArray(messages)) messages = [];
+
+        localMessages = messages;
+        renderMessages(messages);
+      } catch (err) {
+        console.error('Error loading messages from worker:', err);
+      }
+    }
+
+    function renderMessages(messages) {
+      const container = document.getElementById('chat-messages');
+      const isAtBottom = container.scrollHeight - container.clientHeight <= container.scrollTop + 50;
+
+      container.innerHTML = '';
+      messages.forEach(appendMessage);
+
+      if (isAtBottom) {
+        scrollToBottom();
+      }
+    }
+
+    function appendMessage(msg) {
+      const container = document.getElementById('chat-messages');
+      const isSent = msg.sender === currentUsername;
+
+      const bubble = document.createElement('div');
+      bubble.className = `message-bubble ${isSent ? 'sent' : 'received'}`;
+
+      const senderDiv = document.createElement('div');
+      senderDiv.className = 'message-sender';
+      senderDiv.textContent = msg.sender || 'Anonymous';
+
+      const textDiv = document.createElement('div');
+      textDiv.textContent = msg.text;
+
+      const timeDiv = document.createElement('div');
+      timeDiv.className = 'message-time';
+      const timeStr = msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+      timeDiv.textContent = timeStr;
+
+      bubble.appendChild(senderDiv);
+      bubble.appendChild(textDiv);
+      bubble.appendChild(timeDiv);
+
+      container.appendChild(bubble);
+    }
+
+    function scrollToBottom() {
+      const container = document.getElementById('chat-messages');
+      container.scrollTop = container.scrollHeight;
+    }
+
+    async function handleSendMessage(e) {
+      e.preventDefault();
+      const input = document.getElementById('message-input');
+      const text = input.value.trim();
+
+      if (!text) return;
+
+      const newMessage = {
+        id: Date.now().toString() + Math.random().toString(36).substring(2, 6),
+        sender: currentUsername,
+        text: text,
+        timestamp: new Date().toISOString()
+      };
+
+      input.value = '';
+
+      // Optimistic update
+      localMessages.push(newMessage);
+      renderMessages(localMessages);
+      scrollToBottom();
+
+      try {
+        await fetch(WORKER_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            key: 'messages',
+            value: JSON.stringify(localMessages)
+          })
+        });
+      } catch (err) {
+        console.error('Error saving message to worker:', err);
+      }
+    }
+  </script>
+</body>
+</html>
