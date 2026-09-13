@@ -1,150 +1,62 @@
 let socket = null;
 let currentUser = null;
-let token = localStorage.getItem('chat_token');
 let typingTimeout = null;
 let isTyping = false;
 
 document.addEventListener('DOMContentLoaded', () => {
-  checkSystemStatus();
-  if (token) {
-    // Attempt auto-login with token
-    const savedUser = localStorage.getItem('chat_username');
-    if (savedUser) {
-      currentUser = { username: savedUser };
-      initChat();
-    }
+  const savedUser = localStorage.getItem('chat_simple_username');
+  if (savedUser) {
+    currentUser = { username: savedUser };
+    initChat();
   }
 });
 
-async function checkSystemStatus() {
-  try {
-    const res = await fetch('/api/status');
-    const data = await res.json();
-    const signupBtn = document.getElementById('signup-submit-btn');
-    const notice = document.getElementById('account-limit-notice');
-
-    if (!data.registrationOpen) {
-      if (signupBtn) signupBtn.disabled = true;
-      if (notice) {
-        notice.textContent = 'Registration closed (Maximum 2/2 accounts registered).';
-        notice.style.color = '#ef4444';
-      }
-    } else {
-      if (signupBtn) signupBtn.disabled = false;
-      if (notice) {
-        notice.textContent = `Max limit: 2 users total (${data.userCount}/2 registered).`;
-        notice.style.color = '#94a3b8';
-      }
-    }
-  } catch (err) {
-    console.error('Error checking system status:', err);
-  }
-}
-
-function switchTab(tab) {
-  const loginForm = document.getElementById('login-form');
-  const signupForm = document.getElementById('signup-form');
-  const tabLogin = document.getElementById('tab-login');
-  const tabSignup = document.getElementById('tab-signup');
-  clearAuthAlerts();
-
-  if (tab === 'login') {
-    loginForm.classList.remove('hidden');
-    signupForm.classList.add('hidden');
-    tabLogin.classList.add('active');
-    tabSignup.classList.remove('active');
-  } else {
-    signupForm.classList.remove('hidden');
-    loginForm.classList.add('hidden');
-    tabSignup.classList.add('active');
-    tabLogin.classList.remove('active');
-    checkSystemStatus();
-  }
-}
-
-function showAuthAlert(msg, type = 'error') {
-  const errorDiv = document.getElementById('auth-error');
-  const infoDiv = document.getElementById('auth-info');
-  clearAuthAlerts();
-
-  if (type === 'error') {
+function showError(msg) {
+  const errorDiv = document.getElementById('join-error');
+  if (errorDiv) {
     errorDiv.textContent = msg;
     errorDiv.classList.remove('hidden');
-  } else {
-    infoDiv.textContent = msg;
-    infoDiv.classList.remove('hidden');
   }
 }
 
-function clearAuthAlerts() {
-  document.getElementById('auth-error').classList.add('hidden');
-  document.getElementById('auth-info').classList.add('hidden');
+function clearError() {
+  const errorDiv = document.getElementById('join-error');
+  if (errorDiv) {
+    errorDiv.classList.add('hidden');
+  }
 }
 
-async function handleLogin(e) {
+async function handleJoin(e) {
   e.preventDefault();
-  clearAuthAlerts();
-  const usernameInput = document.getElementById('login-username').value;
-  const passwordInput = document.getElementById('login-password').value;
+  clearError();
+
+  const usernameInput = document.getElementById('username-input').value.trim();
+  if (!usernameInput) return;
 
   try {
-    const res = await fetch('/api/login', {
+    const res = await fetch('/api/join', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username: usernameInput, password: passwordInput })
+      body: JSON.stringify({ username: usernameInput })
     });
-    const data = await res.json();
 
+    const data = await res.json();
     if (!res.ok) {
-      showAuthAlert(data.error || 'Login failed');
+      showError(data.error || 'Unable to join chat');
       return;
     }
 
-    token = data.token;
     currentUser = data.user;
-    localStorage.setItem('chat_token', token);
-    localStorage.setItem('chat_username', currentUser.username);
+    localStorage.setItem('chat_simple_username', currentUser.username);
 
     initChat();
   } catch (err) {
-    showAuthAlert('Network error during login');
+    showError('Network error connecting to backend server');
   }
 }
 
-async function handleSignup(e) {
-  e.preventDefault();
-  clearAuthAlerts();
-  const usernameInput = document.getElementById('signup-username').value;
-  const passwordInput = document.getElementById('signup-password').value;
-
-  try {
-    const res = await fetch('/api/signup', {
-      method: 'POST',
-      headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ username: usernameInput, password: passwordInput })
-    });
-    const data = await res.json();
-
-    if (!res.ok) {
-      showAuthAlert(data.error || 'Signup failed');
-      return;
-    }
-
-    token = data.token;
-    currentUser = data.user;
-    localStorage.setItem('chat_token', token);
-    localStorage.setItem('chat_username', currentUser.username);
-
-    initChat();
-  } catch (err) {
-    showAuthAlert('Network error during signup');
-  }
-}
-
-function handleLogout() {
-  localStorage.removeItem('chat_token');
-  localStorage.removeItem('chat_username');
-  token = null;
+function handleLeave() {
+  localStorage.removeItem('chat_simple_username');
   currentUser = null;
 
   if (socket) {
@@ -153,40 +65,35 @@ function handleLogout() {
   }
 
   document.getElementById('chat-screen').classList.add('hidden');
-  document.getElementById('auth-screen').classList.remove('hidden');
-  checkSystemStatus();
+  document.getElementById('prompt-screen').classList.remove('hidden');
 }
 
 async function initChat() {
-  document.getElementById('auth-screen').classList.add('hidden');
+  document.getElementById('prompt-screen').classList.add('hidden');
   document.getElementById('chat-screen').classList.remove('hidden');
 
   document.getElementById('current-user-name').textContent = currentUser.username;
   document.getElementById('current-user-avatar').textContent = currentUser.username.charAt(0);
 
-  // Load message history
+  // Load Cloudflare KV stored chat history
   await loadMessages();
 
-  // Connect Socket.io
+  // Connect Socket.io real-time connection
   setupSocket();
 }
 
 async function loadMessages() {
   try {
-    const res = await fetch('/api/messages', {
-      headers: { 'Authorization': `Bearer ${token}` }
-    });
-    if (!res.ok) {
-      if (res.status === 401) handleLogout();
-      return;
-    }
+    const res = await fetch('/api/messages');
+    if (!res.ok) return;
+
     const messages = await res.json();
     const container = document.getElementById('chat-messages');
     container.innerHTML = '';
     messages.forEach(appendMessage);
     scrollToBottom();
   } catch (err) {
-    console.error('Error loading chat history:', err);
+    console.error('Error loading messages:', err);
   }
 }
 
@@ -194,14 +101,11 @@ function setupSocket() {
   if (socket) socket.disconnect();
 
   socket = io({
-    auth: { token }
+    auth: { username: currentUser.username }
   });
 
   socket.on('connect_error', (err) => {
-    console.error('Socket connection error:', err.message);
-    if (err.message.includes('Authentication error')) {
-      handleLogout();
-    }
+    console.error('Socket error:', err.message);
   });
 
   socket.on('online_users', (users) => {
