@@ -1,11 +1,34 @@
 let socket = null;
 let typingTimeout = null;
 let isTyping = false;
-const currentUsername = 'Anonymous';
+let currentUsername = '';
 
 document.addEventListener('DOMContentLoaded', () => {
-  initChat();
+  const savedName = localStorage.getItem('chat_username');
+  if (savedName && savedName.trim()) {
+    currentUsername = savedName.trim();
+    document.getElementById('join-screen').classList.add('hidden');
+    document.getElementById('chat-screen').classList.remove('hidden');
+    initChat();
+  } else {
+    document.getElementById('username-input').focus();
+  }
 });
+
+function handleJoinChat(e) {
+  e.preventDefault();
+  const input = document.getElementById('username-input');
+  const name = input.value.trim();
+  if (!name) return;
+
+  currentUsername = name;
+  localStorage.setItem('chat_username', name);
+
+  document.getElementById('join-screen').classList.add('hidden');
+  document.getElementById('chat-screen').classList.remove('hidden');
+
+  initChat();
+}
 
 async function initChat() {
   await loadMessages();
