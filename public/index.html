@@ -56,6 +56,66 @@
             </span>
           </div>
         </div>
+        <div class="call-header-actions">
+          <button type="button" id="start-voice-call-btn" class="icon-btn" onclick="startCall('voice')" title="Start Voice Call">📞</button>
+          <button type="button" id="start-video-call-btn" class="icon-btn" onclick="startCall('video')" title="Start Video Call">📹</button>
+        </div>
+      </div>
+
+      <!-- Minimized Active Call Floating Bar -->
+      <div id="minimized-call-bar" class="minimized-call-bar hidden" onclick="expandCallOverlay()">
+        <div class="minimized-call-info">
+          <div class="minimized-pulse-dot"></div>
+          <span id="minimized-call-text">📞 Voice call • 00:00</span>
+        </div>
+        <div class="minimized-call-actions">
+          <button type="button" class="minimized-btn" onclick="event.stopPropagation(); expandCallOverlay();">Expand</button>
+          <button type="button" class="minimized-btn end" onclick="event.stopPropagation(); endCall('hangup');">End</button>
+        </div>
+      </div>
+
+      <!-- WhatsApp Call Full Overlay Modal -->
+      <div id="call-overlay-modal" class="call-overlay-modal hidden">
+        <!-- Call Header / Top Controls -->
+        <div class="call-overlay-header">
+          <div class="call-type-badge">
+            <span id="call-type-icon">📞</span>
+            <span id="call-type-title">WhatsApp Voice Call</span>
+          </div>
+          <button type="button" class="call-minimize-btn" onclick="minimizeCallOverlay()" title="Minimize Call">🗕</button>
+        </div>
+
+        <!-- Video Background Grid (For Video Call Mode) -->
+        <div id="call-video-grid" class="call-video-grid hidden">
+          <video id="call-remote-video" class="call-remote-video" autoplay playsinline></video>
+          <div id="call-local-video-wrapper" class="call-local-video-wrapper">
+            <video id="call-local-video" class="call-local-video" autoplay playsinline muted></video>
+          </div>
+        </div>
+
+        <!-- Call User Details (Avatar & Status) -->
+        <div id="call-user-details" class="call-user-details">
+          <div class="call-avatar-wrapper">
+            <div id="call-pulse-ring-1" class="call-pulse-ring hidden"></div>
+            <div id="call-pulse-ring-2" class="call-pulse-ring hidden"></div>
+            <img src="logo.jpg" alt="Avatar" class="call-avatar-img">
+          </div>
+          <div id="call-peer-name" class="call-user-name">Anonymous Chat</div>
+          <div id="call-status-text" class="call-status-text">Calling...</div>
+        </div>
+
+        <!-- In-Call Action Bar Controls -->
+        <div class="call-overlay-controls">
+          <!-- Outgoing / Active Call Controls -->
+          <button type="button" id="call-toggle-audio-btn" class="call-action-btn" onclick="toggleAudio()" title="Mute/Unmute Audio">🎤</button>
+          <button type="button" id="call-toggle-video-btn" class="call-action-btn" onclick="toggleVideo()" title="Camera On/Off">📹</button>
+
+          <!-- Incoming Call Accept Button (Hidden by default) -->
+          <button type="button" id="call-accept-btn" class="call-action-btn accept hidden" onclick="acceptCall()" title="Accept Call">📞</button>
+
+          <!-- End / Decline Button -->
+          <button type="button" id="call-end-btn" class="call-action-btn end" onclick="handleCallEndOrDecline()" title="End Call">🛑</button>
+        </div>
       </div>
 
       <!-- Messages Stream -->
