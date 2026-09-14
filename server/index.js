@@ -56,6 +56,7 @@ io.on('connection', (socket) => {
       id: Date.now().toString() + Math.random().toString(36).substring(2, 6),
       sender: username,
       text: data.text.trim(),
+      replyTo: data.replyTo || null,
       timestamp: new Date().toISOString()
     };
 
