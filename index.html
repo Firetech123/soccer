@@ -336,6 +336,145 @@
       color: var(--text-main);
     }
 
+    /* Edit Preview Bar */
+    .edit-preview-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background-color: #eef7ff;
+      border-top: 1px solid var(--card-border);
+      padding: 6px 12px;
+      font-size: 12px;
+      color: var(--text-muted);
+      flex-shrink: 0;
+    }
+
+    .edit-preview-info {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      margin-right: 8px;
+    }
+
+    .edit-preview-title {
+      font-weight: 600;
+      color: var(--primary);
+      font-size: 11px;
+    }
+
+    .edit-preview-snippet {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      font-size: 11px;
+    }
+
+    .cancel-edit-btn {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      font-size: 16px;
+      cursor: pointer;
+      padding: 0 4px;
+      line-height: 1;
+    }
+
+    .cancel-edit-btn:hover {
+      color: var(--text-main);
+    }
+
+    .edited-tag {
+      font-size: 10px;
+      opacity: 0.7;
+      font-style: italic;
+      margin-left: 4px;
+    }
+
+    .deleted-bubble {
+      font-style: italic;
+      opacity: 0.6;
+      user-select: none;
+    }
+
+    /* Context Menu / Action Modal */
+    .message-menu-backdrop {
+      position: fixed;
+      top: 0;
+      left: 0;
+      right: 0;
+      bottom: 0;
+      background-color: rgba(0, 0, 0, 0.25);
+      z-index: 10000;
+      display: flex;
+      align-items: center;
+      justify-content: center;
+      animation: fadeIn 0.15s ease-out;
+    }
+
+    .message-menu-dialog {
+      background-color: var(--card-bg);
+      border-radius: 12px;
+      width: 220px;
+      box-shadow: 0 8px 24px rgba(0, 0, 0, 0.2);
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .message-menu-item {
+      background: none;
+      border: none;
+      padding: 12px 16px;
+      text-align: left;
+      font-size: 13px;
+      font-weight: 500;
+      color: var(--text-main);
+      cursor: pointer;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      transition: background-color 0.15s;
+    }
+
+    .message-menu-item:hover {
+      background-color: rgba(0, 0, 0, 0.05);
+    }
+
+    .message-menu-item.danger {
+      color: var(--error);
+    }
+
+    .message-menu-item.danger:hover {
+      background-color: var(--error-bg);
+    }
+
+    /* Toast Notification */
+    .toast-notification {
+      position: fixed;
+      bottom: 70px;
+      left: 50%;
+      transform: translateX(-50%);
+      background-color: rgba(0, 0, 0, 0.8);
+      color: #ffffff;
+      padding: 6px 16px;
+      border-radius: 20px;
+      font-size: 12px;
+      font-weight: 500;
+      z-index: 10001;
+      pointer-events: none;
+      animation: fadeIn 0.2s ease-out, fadeOut 0.3s ease-in 1.7s forwards;
+    }
+
+    @keyframes fadeIn {
+      from { opacity: 0; transform: translate(-50%, 10px); }
+      to { opacity: 1; transform: translate(-50%, 0); }
+    }
+
+    @keyframes fadeOut {
+      from { opacity: 1; transform: translate(-50%, 0); }
+      to { opacity: 0; transform: translate(-50%, -10px); }
+    }
+
     .message-bubble.sent {
       align-self: flex-end;
       background-color: var(--msg-sent);
@@ -496,6 +635,15 @@
         <button type="button" class="cancel-reply-btn" onclick="cancelReply()" title="Cancel reply">&times;</button>
       </div>
 
+      <!-- Edit Preview Bar -->
+      <div id="edit-preview-bar" class="edit-preview-bar hidden">
+        <div class="edit-preview-info">
+          <span class="edit-preview-title">Editing Message</span>
+          <span class="edit-preview-snippet" id="edit-preview-text">...</span>
+        </div>
+        <button type="button" class="cancel-edit-btn" onclick="cancelEdit()" title="Cancel edit">&times;</button>
+      </div>
+
       <!-- Chat Input Form -->
       <form id="chat-form" class="chat-input-area" onsubmit="handleSendMessage(event)">
         <input
@@ -514,6 +662,9 @@
     let currentUsername = '';
     let localMessages = [];
     let activeReply = null;
+    let activeEdit = null;
+    let pressTimer = null;
+    let activeMenu = null;
 
     document.addEventListener('DOMContentLoaded', () => {
       const savedName = localStorage.getItem('chat_username');
@@ -579,6 +730,7 @@
     }
 
     function setReplyTarget(msg) {
+      cancelEdit();
       activeReply = {
         id: msg.id,
         sender: msg.sender || 'Anonymous',
@@ -602,6 +754,149 @@
       const previewBar = document.getElementById('reply-preview-bar');
       if (previewBar) {
         previewBar.classList.add('hidden');
+      }
+    }
+
+    function setEditTarget(msg) {
+      cancelReply();
+      activeEdit = msg;
+
+      const previewBar = document.getElementById('edit-preview-bar');
+      const previewText = document.getElementById('edit-preview-text');
+
+      previewText.textContent = msg.text;
+      previewBar.classList.remove('hidden');
+
+      const input = document.getElementById('message-input');
+      input.value = msg.text;
+      input.focus();
+    }
+
+    function cancelEdit() {
+      activeEdit = null;
+      const previewBar = document.getElementById('edit-preview-bar');
+      if (previewBar) {
+        previewBar.classList.add('hidden');
+      }
+    }
+
+    function showToast(message) {
+      const existing = document.querySelector('.toast-notification');
+      if (existing) existing.remove();
+
+      const toast = document.createElement('div');
+      toast.className = 'toast-notification';
+      toast.textContent = message;
+      document.body.appendChild(toast);
+
+      setTimeout(() => {
+        if (toast.parentNode) toast.parentNode.removeChild(toast);
+      }, 2000);
+    }
+
+    function closeContextMenu() {
+      if (activeMenu) {
+        activeMenu.remove();
+        activeMenu = null;
+      }
+    }
+
+    function openContextMenu(event, msg) {
+      event.preventDefault();
+      closeContextMenu();
+
+      const backdrop = document.createElement('div');
+      backdrop.className = 'message-menu-backdrop';
+      backdrop.onclick = (e) => {
+        if (e.target === backdrop) closeContextMenu();
+      };
+
+      const dialog = document.createElement('div');
+      dialog.className = 'message-menu-dialog';
+
+      // Copy Option
+      const copyBtn = document.createElement('button');
+      copyBtn.className = 'message-menu-item';
+      copyBtn.innerHTML = '<span>📋</span> Copy';
+      copyBtn.onclick = () => {
+        navigator.clipboard.writeText(msg.text).then(() => {
+          showToast('Copied to clipboard!');
+        }).catch(() => {
+          const textArea = document.createElement('textarea');
+          textArea.value = msg.text;
+          document.body.appendChild(textArea);
+          textArea.select();
+          document.execCommand('copy');
+          document.body.removeChild(textArea);
+          showToast('Copied to clipboard!');
+        });
+        closeContextMenu();
+      };
+      dialog.appendChild(copyBtn);
+
+      // Edit & Delete Options (Only for sender's own messages)
+      if (msg.sender === currentUsername && !msg.isDeleted) {
+        const editBtn = document.createElement('button');
+        editBtn.className = 'message-menu-item';
+        editBtn.innerHTML = '<span>✏️</span> Edit';
+        editBtn.onclick = () => {
+          setEditTarget(msg);
+          closeContextMenu();
+        };
+
+        const deleteBtn = document.createElement('button');
+        deleteBtn.className = 'message-menu-item danger';
+        deleteBtn.innerHTML = '<span>🗑️</span> Delete';
+        deleteBtn.onclick = async () => {
+          // Delete completely from local array & KV store
+          localMessages = localMessages.filter(m => m.id !== msg.id);
+          renderMessages(localMessages);
+          saveLocalMessagesToWorker();
+          closeContextMenu();
+        };
+
+        dialog.appendChild(editBtn);
+        dialog.appendChild(deleteBtn);
+      }
+
+      backdrop.appendChild(dialog);
+      document.body.appendChild(backdrop);
+      activeMenu = backdrop;
+    }
+
+    function attachHoldAndContextMenuEvents(element, msg) {
+      element.oncontextmenu = (e) => openContextMenu(e, msg);
+
+      const startPress = (e) => {
+        pressTimer = setTimeout(() => {
+          openContextMenu(e, msg);
+        }, 500);
+      };
+
+      const cancelPress = () => {
+        clearTimeout(pressTimer);
+      };
+
+      element.ontouchstart = startPress;
+      element.ontouchend = cancelPress;
+      element.ontouchmove = cancelPress;
+      element.onmousedown = startPress;
+      element.onmouseup = cancelPress;
+      element.onmouseleave = cancelPress;
+    }
+
+    async function saveLocalMessagesToWorker() {
+      try {
+        await fetch(WORKER_URL, {
+          method: 'POST',
+          headers: { 'Content-Type': 'application/json' },
+          body: JSON.stringify({
+            key: 'messages',
+            value: JSON.stringify(localMessages)
+          })
+        });
+      } catch (err) {
+        console.error('Error saving messages to worker:', err);
       }
     }
 
@@ -650,7 +945,20 @@
       }
 
       const textDiv = document.createElement('div');
-      textDiv.textContent = msg.text;
+      textDiv.className = 'message-text-content';
+
+      if (msg.isDeleted) {
+        bubble.classList.add('deleted-bubble');
+        textDiv.textContent = 'This message was deleted';
+      } else {
+        textDiv.textContent = msg.text;
+        if (msg.isEdited) {
+          const editedSpan = document.createElement('span');
+          editedSpan.className = 'edited-tag';
+          editedSpan.textContent = ' (edited)';
+          textDiv.appendChild(editedSpan);
+        }
+      }
 
       const timeDiv = document.createElement('div');
       timeDiv.className = 'message-time';
@@ -659,6 +967,10 @@
 
       bubble.appendChild(textDiv);
       bubble.appendChild(timeDiv);
+
+      if (!msg.isDeleted) {
+        attachHoldAndContextMenuEvents(bubble, msg);
+      }
 
       container.appendChild(bubble);
     }
@@ -674,6 +986,20 @@
       const text = input.value.trim();
 
       if (!text) return;
+
+      if (activeEdit) {
+        const msgIdx = localMessages.findIndex(m => m.id === activeEdit.id);
+        if (msgIdx !== -1) {
+          localMessages[msgIdx].text = text;
+          localMessages[msgIdx].isEdited = true;
+          localMessages[msgIdx].editedAt = new Date().toISOString();
+        }
+        input.value = '';
+        cancelEdit();
+        renderMessages(localMessages);
+        saveLocalMessagesToWorker();
+        return;
+      }
 
       const newMessage = {
         id: Date.now().toString() + Math.random().toString(36).substring(2, 6),
@@ -691,18 +1017,7 @@
       renderMessages(localMessages);
       scrollToBottom();
 
-      try {
-        await fetch(WORKER_URL, {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({
-            key: 'messages',
-            value: JSON.stringify(localMessages)
-          })
-        });
-      } catch (err) {
-        console.error('Error saving message to worker:', err);
-      }
+      saveLocalMessagesToWorker();
     }
   </script>
 </body>

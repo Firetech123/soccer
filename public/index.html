@@ -74,6 +74,15 @@
         <button type="button" class="cancel-reply-btn" onclick="cancelReply()" title="Cancel reply">&times;</button>
       </div>
 
+      <!-- Edit Preview Bar -->
+      <div id="edit-preview-bar" class="edit-preview-bar hidden">
+        <div class="edit-preview-info">
+          <span class="edit-preview-title">Editing Message</span>
+          <span class="edit-preview-snippet" id="edit-preview-text">...</span>
+        </div>
+        <button type="button" class="cancel-edit-btn" onclick="cancelEdit()" title="Cancel edit">&times;</button>
+      </div>
+
       <!-- Chat Input Form -->
       <form id="chat-form" class="chat-input-area" onsubmit="handleSendMessage(event)">
         <input
