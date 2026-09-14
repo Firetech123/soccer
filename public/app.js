@@ -3,6 +3,9 @@ let typingTimeout = null;
 let isTyping = false;
 let currentUsername = '';
 let activeReply = null;
+let activeEdit = null;
+let pressTimer = null;
+let activeMenu = null;
 
 document.addEventListener('DOMContentLoaded', () => {
   const savedName = localStorage.getItem('chat_username');
@@ -67,6 +70,14 @@ function setupSocket() {
     scrollToBottom();
   });
 
+  socket.on('message_edited', (msg) => {
+    updateMessageInDOM(msg);
+  });
+
+  socket.on('message_deleted', (data) => {
+    markMessageAsDeletedInDOM(data.id);
+  });
+
   socket.on('user_typing', (data) => {
     if (data.socketId !== socket.id) {
       const typingIndicator = document.getElementById('typing-indicator');
@@ -84,6 +95,7 @@ function setupSocket() {
 }
 
 function setReplyTarget(msg) {
+  cancelEdit();
   activeReply = {
     id: msg.id,
     sender: msg.sender || 'Anonymous',
@@ -108,6 +120,140 @@ function cancelReply() {
   if (previewBar) {
     previewBar.classList.add('hidden');
   }
+}
+
+function setEditTarget(msg) {
+  cancelReply();
+  activeEdit = msg;
+
+  const previewBar = document.getElementById('edit-preview-bar');
+  const previewText = document.getElementById('edit-preview-text');
+
+  previewText.textContent = msg.text;
+  previewBar.classList.remove('hidden');
+
+  const input = document.getElementById('message-input');
+  input.value = msg.text;
+  input.focus();
+}
+
+function cancelEdit() {
+  activeEdit = null;
+  const previewBar = document.getElementById('edit-preview-bar');
+  if (previewBar) {
+    previewBar.classList.add('hidden');
+  }
+}
+
+function showToast(message) {
+  const existing = document.querySelector('.toast-notification');
+  if (existing) existing.remove();
+
+  const toast = document.createElement('div');
+  toast.className = 'toast-notification';
+  toast.textContent = message;
+  document.body.appendChild(toast);
+
+  setTimeout(() => {
+    if (toast.parentNode) toast.parentNode.removeChild(toast);
+  }, 2000);
+}
+
+function closeContextMenu() {
+  if (activeMenu) {
+    activeMenu.remove();
+    activeMenu = null;
+  }
+}
+
+function openContextMenu(event, msg) {
+  event.preventDefault();
+  closeContextMenu();
+
+  const backdrop = document.createElement('div');
+  backdrop.className = 'message-menu-backdrop';
+  backdrop.onclick = (e) => {
+    if (e.target === backdrop) closeContextMenu();
+  };
+
+  const dialog = document.createElement('div');
+  dialog.className = 'message-menu-dialog';
+
+  // Copy Option
+  const copyBtn = document.createElement('button');
+  copyBtn.className = 'message-menu-item';
+  copyBtn.innerHTML = '<span>📋</span> Copy';
+  copyBtn.onclick = () => {
+    navigator.clipboard.writeText(msg.text).then(() => {
+      showToast('Copied to clipboard!');
+    }).catch(() => {
+      // Fallback
+      const textArea = document.createElement('textarea');
+      textArea.value = msg.text;
+      document.body.appendChild(textArea);
+      textArea.select();
+      document.execCommand('copy');
+      document.body.removeChild(textArea);
+      showToast('Copied to clipboard!');
+    });
+    closeContextMenu();
+  };
+  dialog.appendChild(copyBtn);
+
+  // Edit & Delete Options (Only for sender's own messages)
+  if (msg.sender === currentUsername && !msg.isDeleted) {
+    const editBtn = document.createElement('button');
+    editBtn.className = 'message-menu-item';
+    editBtn.innerHTML = '<span>✏️</span> Edit';
+    editBtn.onclick = () => {
+      setEditTarget(msg);
+      closeContextMenu();
+    };
+
+    const deleteBtn = document.createElement('button');
+    deleteBtn.className = 'message-menu-item danger';
+    deleteBtn.innerHTML = '<span>🗑️</span> Delete';
+    deleteBtn.onclick = () => {
+      if (socket) {
+        socket.emit('delete_message', { id: msg.id });
+      }
+      closeContextMenu();
+    };
+
+    dialog.appendChild(editBtn);
+    dialog.appendChild(deleteBtn);
+  }
+
+  backdrop.appendChild(dialog);
+  document.body.appendChild(backdrop);
+  activeMenu = backdrop;
+}
+
+function attachHoldAndContextMenuEvents(element, msg) {
+  // Right click context menu for desktop
+  element.oncontextmenu = (e) => {
+    clearTimeout(pressTimer);
+    openContextMenu(e, msg);
+  };
+
+  // Long press for touch devices & click-hold
+  const startPress = (e) => {
+    clearTimeout(pressTimer);
+    pressTimer = setTimeout(() => {
+      openContextMenu(e, msg);
+    }, 500);
+  };
+
+  const cancelPress = () => {
+    clearTimeout(pressTimer);
+  };
+
+  element.ontouchstart = startPress;
+  element.ontouchend = cancelPress;
+  element.ontouchmove = cancelPress;
+  element.onmousedown = startPress;
+  element.onmouseup = cancelPress;
+  element.onmouseleave = cancelPress;
 }
 
 function appendMessage(msg) {
@@ -155,17 +301,62 @@ function appendMessage(msg) {
   }
 
   const textDiv = document.createElement('div');
-  textDiv.textContent = msg.text;
+  textDiv.className = 'message-text-content';
+
+  if (msg.isDeleted) {
+    bubble.classList.add('deleted-bubble');
+    textDiv.textContent = 'This message was deleted';
+  } else {
+    textDiv.textContent = msg.text;
+    if (msg.isEdited) {
+      const editedSpan = document.createElement('span');
+      editedSpan.className = 'edited-tag';
+      editedSpan.textContent = ' (edited)';
+      textDiv.appendChild(editedSpan);
+    }
+  }
 
   const timeDiv = document.createElement('div');
   timeDiv.className = 'message-time';
-  const timeStr = new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+  const timeStr = msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
   timeDiv.textContent = timeStr;
 
   bubble.appendChild(textDiv);
   bubble.appendChild(timeDiv);
 
+  if (!msg.isDeleted) {
+    attachHoldAndContextMenuEvents(bubble, msg);
+  }
+
   container.appendChild(bubble);
+}
+
+function updateMessageInDOM(msg) {
+  const bubble = document.querySelector(`.message-bubble[data-id="${msg.id}"]`);
+  if (!bubble) return;
+
+  const textDiv = bubble.querySelector('.message-text-content');
+  if (textDiv) {
+    textDiv.textContent = msg.text;
+    if (msg.isEdited) {
+      const editedSpan = document.createElement('span');
+      editedSpan.className = 'edited-tag';
+      editedSpan.textContent = ' (edited)';
+      textDiv.appendChild(editedSpan);
+    }
+    attachHoldAndContextMenuEvents(bubble, msg);
+  }
+}
+
+function markMessageAsDeletedInDOM(msgId) {
+  const bubble = document.querySelector(`.message-bubble[data-id="${msgId}"]`);
+  if (!bubble) return;
+
+  bubble.classList.add('deleted-bubble');
+  const textDiv = bubble.querySelector('.message-text-content');
+  if (textDiv) {
+    textDiv.textContent = 'This message was deleted';
+  }
 }
 
 function scrollToBottom() {
@@ -179,6 +370,17 @@ function handleSendMessage(e) {
   const text = input.value.trim();
 
   if (!text || !socket) return;
+
+  if (activeEdit) {
+    socket.emit('edit_message', { id: activeEdit.id, text });
+    input.value = '';
+    cancelEdit();
+    if (isTyping) {
+      socket.emit('stop_typing');
+      isTyping = false;
+    }
+    return;
+  }
 
   const payload = { text };
   if (activeReply) {

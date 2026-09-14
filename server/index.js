@@ -67,6 +67,44 @@ io.on('connection', (socket) => {
     io.emit('new_message', message);
   });
 
+  // Handle message edit
+  socket.on('edit_message', async (data) => {
+    if (!data.id || !data.text || !data.text.trim()) return;
+
+    let messages = await getMessages();
+    const msgIndex = messages.findIndex(m => m.id === data.id);
+    if (msgIndex === -1) return;
+
+    // Check permission: only original sender can edit
+    if (messages[msgIndex].sender !== username) return;
+
+    messages[msgIndex].text = data.text.trim();
+    messages[msgIndex].isEdited = true;
+    messages[msgIndex].editedAt = new Date().toISOString();
+
+    await saveMessages(messages);
+    io.emit('message_edited', messages[msgIndex]);
+  });
+
+  // Handle message delete
+  socket.on('delete_message', async (data) => {
+    if (!data.id) return;
+
+    let messages = await getMessages();
+    const msgIndex = messages.findIndex(m => m.id === data.id);
+    if (msgIndex === -1) return;
+
+    // Check permission: only original sender can delete
+    if (messages[msgIndex].sender !== username) return;
+
+    // Completely remove from database / KV store
+    const deletedId = messages[msgIndex].id;
+    messages.splice(msgIndex, 1);
+
+    await saveMessages(messages);
+    io.emit('message_deleted', { id: deletedId });
+  });
+
   // Typing status handlers
   socket.on('typing', () => {
     socket.broadcast.emit('user_typing', { username, socketId: socket.id });
