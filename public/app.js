@@ -1,3 +1,4 @@
+const MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024; // 5MB limit
 let socket = null;
 let typingTimeout = null;
 let isTyping = false;
@@ -6,8 +7,11 @@ let activeReply = null;
 let activeEdit = null;
 let pressTimer = null;
 let activeMenu = null;
+let pendingImageBase64 = null;
+let pendingImageName = '';
 
 document.addEventListener('DOMContentLoaded', () => {
+  setupDragAndDropAndPaste();
   const savedName = localStorage.getItem('chat_username');
   if (savedName && savedName.trim()) {
     currentUsername = savedName.trim();
@@ -18,6 +22,101 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('username-input').focus();
   }
 });
+
+function setupDragAndDropAndPaste() {
+  const chatCard = document.getElementById('chat-screen');
+  if (!chatCard) return;
+
+  // Drag and drop handlers
+  ['dragenter', 'dragover'].forEach(eventName => {
+    chatCard.addEventListener(eventName, (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      chatCard.classList.add('drag-active');
+    }, false);
+  });
+
+  ['dragleave', 'drop'].forEach(eventName => {
+    chatCard.addEventListener(eventName, (e) => {
+      e.preventDefault();
+      e.stopPropagation();
+      chatCard.classList.remove('drag-active');
+    }, false);
+  });
+
+  chatCard.addEventListener('drop', (e) => {
+    const dt = e.dataTransfer;
+    const files = dt.files;
+    if (files && files.length > 0) {
+      processImageFile(files[0]);
+    }
+  });
+
+  // Clipboard paste listener
+  window.addEventListener('paste', (e) => {
+    const items = (e.clipboardData || e.originalEvent.clipboardData)?.items;
+    if (!items) return;
+    for (const item of items) {
+      if (item.type.indexOf('image') !== -1) {
+        const file = item.getAsFile();
+        if (file) {
+          processImageFile(file);
+          break;
+        }
+      }
+    }
+  });
+}
+
+function processImageFile(file) {
+  if (!file || !file.type.startsWith('image/')) {
+    showToast('Please select a valid image file');
+    return;
+  }
+
+  if (file.size > MAX_IMAGE_SIZE_BYTES) {
+    showToast('Image size exceeds 5MB limit');
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.onload = function(e) {
+    pendingImageBase64 = e.target.result;
+    pendingImageName = file.name || 'Pasted Image';
+    showImagePreviewBar(pendingImageBase64, pendingImageName);
+  };
+  reader.onerror = function() {
+    showToast('Failed to read image file');
+  };
+  reader.readAsDataURL(file);
+}
+
+function handleImageFileSelect(e) {
+  const file = e.target.files[0];
+  if (file) {
+    processImageFile(file);
+  }
+  e.target.value = ''; // reset input
+}
+
+function showImagePreviewBar(base64Data, fileName) {
+  const bar = document.getElementById('image-preview-bar');
+  const img = document.getElementById('image-preview-img');
+  const name = document.getElementById('image-preview-name');
+
+  img.src = base64Data;
+  name.textContent = fileName;
+  bar.classList.remove('hidden');
+}
+
+function removeAttachedImage() {
+  pendingImageBase64 = null;
+  pendingImageName = '';
+  const bar = document.getElementById('image-preview-bar');
+  const img = document.getElementById('image-preview-img');
+  if (img) img.src = '';
+  if (bar) bar.classList.add('hidden');
+}
 
 function handleJoinChat(e) {
   e.preventDefault();
@@ -166,6 +265,29 @@ function closeContextMenu() {
   }
 }
 
+function openImageModal(src) {
+  const backdrop = document.createElement('div');
+  backdrop.className = 'image-modal-backdrop';
+  backdrop.onclick = (e) => {
+    if (e.target === backdrop || e.target.classList.contains('image-modal-close')) {
+      backdrop.remove();
+    }
+  };
+
+  const closeBtn = document.createElement('span');
+  closeBtn.className = 'image-modal-close';
+  closeBtn.innerHTML = '&times;';
+
+  const img = document.createElement('img');
+  img.className = 'image-modal-content';
+  img.src = src;
+  img.alt = 'Full size preview';
+
+  backdrop.appendChild(closeBtn);
+  backdrop.appendChild(img);
+  document.body.appendChild(backdrop);
+}
+
 function openContextMenu(event, msg) {
   event.preventDefault();
   closeContextMenu();
@@ -184,12 +306,13 @@ function openContextMenu(event, msg) {
   copyBtn.className = 'message-menu-item';
   copyBtn.innerHTML = '<span>📋</span> Copy';
   copyBtn.onclick = () => {
-    navigator.clipboard.writeText(msg.text).then(() => {
+    const textToCopy = msg.text;
+    navigator.clipboard.writeText(textToCopy).then(() => {
       showToast('Copied to clipboard!');
     }).catch(() => {
       // Fallback
       const textArea = document.createElement('textarea');
-      textArea.value = msg.text;
+      textArea.value = textToCopy;
       document.body.appendChild(textArea);
       textArea.select();
       document.execCommand('copy');
@@ -293,7 +416,16 @@ function appendMessage(msg) {
 
     const quoteText = document.createElement('div');
     quoteText.className = 'reply-quote-text';
-    quoteText.textContent = msg.replyTo.text || '';
+
+    let displayQuoteText = msg.replyTo.text || '';
+    if (displayQuoteText.includes('data:image/')) {
+      const match = displayQuoteText.match(/data:image\/[a-zA-Z]+;base64,[^\n\s]+/);
+      if (match) {
+        const caption = displayQuoteText.replace(match[0], '').trim();
+        displayQuoteText = caption ? `📷 Image: ${caption}` : '📷 Image';
+      }
+    }
+    quoteText.textContent = displayQuoteText;
 
     quoteDiv.appendChild(quoteSender);
     quoteDiv.appendChild(quoteText);
@@ -307,7 +439,33 @@ function appendMessage(msg) {
     bubble.classList.add('deleted-bubble');
     textDiv.textContent = 'This message was deleted';
   } else {
-    textDiv.textContent = msg.text;
+    const fullText = msg.text || '';
+    const base64Regex = /data:image\/[a-zA-Z]+;base64,[^\n\s]+/;
+    const match = fullText.match(base64Regex);
+
+    if (match) {
+      const imageSrc = match[0];
+      const captionText = fullText.replace(imageSrc, '').trim();
+
+      const imgEl = document.createElement('img');
+      imgEl.src = imageSrc;
+      imgEl.alt = 'Uploaded Image';
+      imgEl.className = 'chat-image-thumbnail';
+      imgEl.onclick = (e) => {
+        e.stopPropagation();
+        openImageModal(imageSrc);
+      };
+      textDiv.appendChild(imgEl);
+
+      if (captionText) {
+        const captionDiv = document.createElement('div');
+        captionDiv.textContent = captionText;
+        textDiv.appendChild(captionDiv);
+      }
+    } else {
+      textDiv.textContent = fullText;
+    }
+
     if (msg.isEdited) {
       const editedSpan = document.createElement('span');
       editedSpan.className = 'edited-tag';
@@ -367,13 +525,19 @@ function scrollToBottom() {
 function handleSendMessage(e) {
   e.preventDefault();
   const input = document.getElementById('message-input');
-  const text = input.value.trim();
+  const captionText = input.value.trim();
 
-  if (!text || !socket) return;
+  if ((!captionText && !pendingImageBase64) || !socket) return;
+
+  let combinedText = captionText;
+  if (pendingImageBase64) {
+    combinedText = captionText ? `${pendingImageBase64}\n${captionText}` : pendingImageBase64;
+  }
 
   if (activeEdit) {
-    socket.emit('edit_message', { id: activeEdit.id, text });
+    socket.emit('edit_message', { id: activeEdit.id, text: combinedText });
     input.value = '';
+    removeAttachedImage();
     cancelEdit();
     if (isTyping) {
       socket.emit('stop_typing');
@@ -382,13 +546,14 @@ function handleSendMessage(e) {
     return;
   }
 
-  const payload = { text };
+  const payload = { text: combinedText };
   if (activeReply) {
     payload.replyTo = activeReply;
   }
 
   socket.emit('send_message', payload);
   input.value = '';
+  removeAttachedImage();
   cancelReply();
 
   if (isTyping) {
