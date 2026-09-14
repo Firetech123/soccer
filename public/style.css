@@ -79,6 +79,23 @@ body {
 .logo-icon {
   font-size: 38px;
   margin-bottom: 6px;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+}
+
+.logo-img {
+  max-width: 140px;
+  height: auto;
+  object-fit: contain;
+  border-radius: 8px;
+}
+
+.avatar-img {
+  width: 34px;
+  height: 34px;
+  border-radius: 50%;
+  object-fit: cover;
 }
 
 .prompt-header h2 {
