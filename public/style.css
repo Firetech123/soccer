@@ -22,6 +22,12 @@
   font-family: 'Inter', -apple-system, BlinkMacSystemFont, sans-serif;
 }
 
+html, body {
+  overflow-x: hidden;
+  touch-action: pan-y;
+  overscroll-behavior-x: none;
+}
+
 body.dark-theme {
   background-color: var(--bg-color);
   color: var(--text-main);
@@ -31,6 +37,9 @@ body.dark-theme {
   align-items: center;
   justify-content: center;
   padding: 20px;
+  position: relative;
+  left: 0;
+  transition: transform 0.2s ease-out;
 }
 
 .app-container {
@@ -39,6 +48,7 @@ body.dark-theme {
   height: 620px;
   max-height: calc(100dvh - 40px);
   display: flex;
+  overflow-x: hidden;
 }
 
 .card {
