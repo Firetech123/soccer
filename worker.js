@@ -21,6 +21,35 @@ export default {
     const key = url.searchParams.get('key') || 'messages';
 
     try {
+      const RETENTION_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+      // Helper function to filter out items older than 24 hours
+      function filterExpired(data) {
+        if (!data) return data;
+        let parsed = data;
+        if (typeof data === 'string') {
+          try {
+            parsed = JSON.parse(data);
+          } catch {
+            return data;
+          }
+        }
+        if (Array.isArray(parsed)) {
+          const now = Date.now();
+          const filtered = parsed.filter((item) => {
+            if (!item) return false;
+            let time = item.timestamp ? new Date(item.timestamp).getTime() : null;
+            if (!time && item.id && !isNaN(Number(item.id.slice(0, 13)))) {
+              time = Number(item.id.slice(0, 13));
+            }
+            if (!time) return true; // keep if timestamp missing
+            return now - time < RETENTION_MS;
+          });
+          return typeof data === 'string' ? JSON.stringify(filtered) : filtered;
+        }
+        return data;
+      }
+
       if (request.method === 'GET') {
         let value = null;
         if (kv) {
@@ -29,7 +58,14 @@ export default {
         if (!value) {
           value = '[]';
         }
-        return new Response(value, {
+
+        // Filter expired items for array data (messages or signals)
+        let filteredValue = filterExpired(value);
+        if (typeof filteredValue !== 'string') {
+          filteredValue = JSON.stringify(filteredValue);
+        }
+
+        return new Response(filteredValue, {
           status: 200,
           headers: {
             ...corsHeaders,
@@ -48,13 +84,15 @@ export default {
           payload = body.value;
         }
 
-        const valueString = typeof payload === 'string' ? payload : JSON.stringify(payload);
+        // Filter expired items before saving
+        const filteredPayload = filterExpired(payload);
+        const valueString = typeof filteredPayload === 'string' ? filteredPayload : JSON.stringify(filteredPayload);
 
         if (kv) {
-          await kv.put(targetKey, valueString);
+          await kv.put(targetKey, valueString, { expirationTtl: 86400 });
         }
 
-        return new Response(JSON.stringify({ success: true, key: targetKey, data: payload }), {
+        return new Response(JSON.stringify({ success: true, key: targetKey, data: filteredPayload }), {
           status: 200,
           headers: {
             ...corsHeaders,

@@ -1101,7 +1101,7 @@
           <div>
             <h3>Anonymous Chat</h3>
             <span class="status-indicator">
-              <span class="status-dot online"></span> Connected
+              <span class="status-dot online"></span> Connected • Messages deleted after 24h
             </span>
           </div>
         </div>
@@ -1857,6 +1857,22 @@
       saveLocalMessagesToWorker();
     }
 
+    const RETENTION_MS = 24 * 60 * 60 * 1000;
+
+    function filterExpiredMessagesClient(messages) {
+      if (!Array.isArray(messages)) return [];
+      const now = Date.now();
+      return messages.filter(item => {
+        if (!item) return false;
+        let time = item.timestamp ? new Date(item.timestamp).getTime() : null;
+        if (!time && item.id && !isNaN(Number(item.id.slice(0, 13)))) {
+          time = Number(item.id.slice(0, 13));
+        }
+        if (!time) return true;
+        return now - time < RETENTION_MS;
+      });
+    }
+
     async function loadMessages() {
       try {
         const res = await fetch(`${WORKER_URL}?key=messages`);
@@ -1868,8 +1884,8 @@
         }
         if (!Array.isArray(messages)) messages = [];
 
-        localMessages = messages;
-        renderMessages(messages);
+        localMessages = filterExpiredMessagesClient(messages);
+        renderMessages(localMessages);
       } catch (err) {
         console.error('Error loading messages from worker:', err);
       }
