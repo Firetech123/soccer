@@ -25,8 +25,11 @@
 
 html, body {
   height: 100%;
+  height: 100dvh;
+  width: 100%;
   background-color: var(--bg-color);
   color: var(--text-main);
+  overflow: hidden;
 }
 
 body {
@@ -450,24 +453,34 @@ body {
   font-size: 13px;
 }
 
-/* Mobile Responsiveness */
-@media (max-width: 480px) {
+/* Full-Screen Mobile Responsiveness */
+@media (max-width: 768px) {
   .app-container {
+    position: fixed;
+    top: 0;
+    left: 0;
     right: 0;
     bottom: 0;
     width: 100%;
+    height: 100vh;
     height: 100dvh;
+    z-index: 9999;
   }
 
   .card {
     border-radius: 0;
     border: none;
+    box-shadow: none;
+    height: 100%;
+    width: 100%;
   }
 
   .prompt-card {
+    max-height: 100vh;
     max-height: 100dvh;
     margin-top: 0;
     justify-content: center;
+    padding: 32px 24px;
   }
 }
 
