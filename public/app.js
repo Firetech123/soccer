@@ -4,12 +4,7 @@ let isTyping = false;
 let currentUsername = '';
 let activeReply = null;
 
-let currentOffsetX = 0;
-
 document.addEventListener('DOMContentLoaded', () => {
-  preventHorizontalSwipe();
-  setupKeyboardMovement();
-
   const savedName = localStorage.getItem('chat_username');
   if (savedName && savedName.trim()) {
     currentUsername = savedName.trim();
@@ -20,55 +15,6 @@ document.addEventListener('DOMContentLoaded', () => {
     document.getElementById('username-input').focus();
   }
 });
-
-function setupKeyboardMovement() {
-  window.addEventListener('keydown', (e) => {
-    const activeEl = document.activeElement;
-    const isEditingInput = activeEl && (
-      activeEl.tagName === 'INPUT' ||
-      activeEl.tagName === 'TEXTAREA' ||
-      activeEl.isContentEditable
-    );
-
-    if (isEditingInput) {
-      return;
-    }
-
-    const MOVE_STEP = 40;
-    if (e.key === 'ArrowLeft') {
-      currentOffsetX -= MOVE_STEP;
-      document.body.style.transform = `translateX(${currentOffsetX}px)`;
-    } else if (e.key === 'ArrowRight') {
-      currentOffsetX += MOVE_STEP;
-      document.body.style.transform = `translateX(${currentOffsetX}px)`;
-    }
-  });
-}
-
-function preventHorizontalSwipe() {
-  let touchStartX = 0;
-  let touchStartY = 0;
-
-  window.addEventListener('touchstart', (e) => {
-    if (e.touches.length === 1) {
-      touchStartX = e.touches[0].clientX;
-      touchStartY = e.touches[0].clientY;
-    }
-  }, { passive: true });
-
-  window.addEventListener('touchmove', (e) => {
-    if (e.touches.length === 1) {
-      const touchCurrentX = e.touches[0].clientX;
-      const touchCurrentY = e.touches[0].clientY;
-      const diffX = Math.abs(touchCurrentX - touchStartX);
-      const diffY = Math.abs(touchCurrentY - touchStartY);
-
-      if (diffX > diffY) {
-        e.preventDefault();
-      }
-    }
-  }, { passive: false });
-}
 
 function handleJoinChat(e) {
   e.preventDefault();
