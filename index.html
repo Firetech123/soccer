@@ -36,6 +36,7 @@
       background-color: var(--bg-color);
       color: var(--text-main);
       min-height: 100vh;
+      min-height: 100dvh;
       display: flex;
       align-items: center;
       justify-content: center;
@@ -46,6 +47,7 @@
       width: 100%;
       max-width: 800px;
       height: 620px;
+      max-height: calc(100dvh - 40px);
       display: flex;
     }
 
@@ -129,7 +131,7 @@
 
     /* Chat Card */
     .chat-card {
-      height: 620px;
+      height: 100%;
     }
 
     .chat-header {
@@ -190,12 +192,108 @@
     }
 
     .message-bubble {
-      max-width: 70%;
-      padding: 10px 16px;
+      position: relative;
+      max-width: 75%;
+      padding: 10px 14px;
       border-radius: 14px;
       font-size: 14px;
       line-height: 1.4;
       word-break: break-word;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .message-header-row {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      gap: 8px;
+      margin-bottom: 4px;
+    }
+
+    .reply-btn {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      font-size: 12px;
+      cursor: pointer;
+      opacity: 0.7;
+      padding: 2px 4px;
+      border-radius: 4px;
+      transition: opacity 0.2s, background-color 0.2s;
+    }
+
+    .reply-btn:hover {
+      opacity: 1;
+      background-color: rgba(255, 255, 255, 0.1);
+    }
+
+    .reply-quote {
+      background-color: rgba(0, 0, 0, 0.2);
+      border-left: 3px solid var(--primary);
+      border-radius: 4px;
+      padding: 6px 10px;
+      margin-bottom: 6px;
+      font-size: 12px;
+    }
+
+    .reply-quote-sender {
+      font-weight: 600;
+      color: var(--primary);
+      margin-bottom: 2px;
+    }
+
+    .reply-quote-text {
+      color: var(--text-muted);
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      max-width: 200px;
+    }
+
+    .reply-preview-bar {
+      display: flex;
+      align-items: center;
+      justify-content: space-between;
+      background-color: var(--card-bg);
+      border-top: 1px solid var(--card-border);
+      padding: 8px 16px;
+      font-size: 13px;
+      color: var(--text-muted);
+    }
+
+    .reply-preview-info {
+      display: flex;
+      flex-direction: column;
+      overflow: hidden;
+      margin-right: 8px;
+    }
+
+    .reply-preview-title {
+      font-weight: 600;
+      color: var(--primary);
+      font-size: 12px;
+    }
+
+    .reply-preview-snippet {
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+      font-size: 12px;
+    }
+
+    .cancel-reply-btn {
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      font-size: 18px;
+      cursor: pointer;
+      padding: 0 4px;
+      line-height: 1;
+    }
+
+    .cancel-reply-btn:hover {
+      color: var(--text-main);
     }
 
     .message-bubble.sent {
@@ -267,6 +365,51 @@
     .primary-btn:hover {
       background-color: var(--primary-hover);
     }
+
+    /* Mobile Responsiveness */
+    @media (max-width: 640px) {
+      body.dark-theme {
+        padding: 0;
+      }
+
+      .app-container {
+        height: 100dvh;
+        max-height: 100dvh;
+        border-radius: 0;
+      }
+
+      .card {
+        border-radius: 0;
+        border: none;
+      }
+
+      .prompt-card {
+        width: 100%;
+        max-width: 100%;
+        padding: 24px 16px;
+        box-shadow: none;
+      }
+
+      .chat-header {
+        padding: 12px 16px;
+      }
+
+      .chat-messages {
+        padding: 16px 12px;
+      }
+
+      .chat-input-area {
+        padding: 12px 16px;
+      }
+
+      .message-bubble {
+        max-width: 85%;
+      }
+
+      .reply-quote-text {
+        max-width: 160px;
+      }
+    }
   </style>
 </head>
 <body class="dark-theme">
@@ -314,6 +457,15 @@
         <!-- Messages appended dynamically -->
       </div>
 
+      <!-- Reply Preview Bar -->
+      <div id="reply-preview-bar" class="reply-preview-bar hidden">
+        <div class="reply-preview-info">
+          <span class="reply-preview-title" id="reply-preview-sender">Replying to ...</span>
+          <span class="reply-preview-snippet" id="reply-preview-text">...</span>
+        </div>
+        <button type="button" class="cancel-reply-btn" onclick="cancelReply()" title="Cancel reply">&times;</button>
+      </div>
+
       <!-- Chat Input Form -->
       <form id="chat-form" class="chat-input-area" onsubmit="handleSendMessage(event)">
         <input
@@ -331,6 +483,7 @@
     const WORKER_URL = 'https://dark-surf-6029.firetechsoftware.workers.dev/';
     let currentUsername = '';
     let localMessages = [];
+    let activeReply = null;
 
     document.addEventListener('DOMContentLoaded', () => {
       const savedName = localStorage.getItem('chat_username');
@@ -395,16 +548,76 @@
       }
     }
 
+    function setReplyTarget(msg) {
+      activeReply = {
+        id: msg.id,
+        sender: msg.sender || 'Anonymous',
+        text: msg.text
+      };
+
+      const previewBar = document.getElementById('reply-preview-bar');
+      const previewSender = document.getElementById('reply-preview-sender');
+      const previewText = document.getElementById('reply-preview-text');
+
+      previewSender.textContent = `Replying to ${activeReply.sender}`;
+      previewText.textContent = activeReply.text;
+      previewBar.classList.remove('hidden');
+
+      const input = document.getElementById('message-input');
+      input.focus();
+    }
+
+    function cancelReply() {
+      activeReply = null;
+      const previewBar = document.getElementById('reply-preview-bar');
+      if (previewBar) {
+        previewBar.classList.add('hidden');
+      }
+    }
+
     function appendMessage(msg) {
       const container = document.getElementById('chat-messages');
       const isSent = msg.sender === currentUsername;
 
       const bubble = document.createElement('div');
       bubble.className = `message-bubble ${isSent ? 'sent' : 'received'}`;
+      bubble.dataset.id = msg.id;
+
+      // Header row with sender & reply action
+      const headerRow = document.createElement('div');
+      headerRow.className = 'message-header-row';
 
       const senderDiv = document.createElement('div');
       senderDiv.className = 'message-sender';
       senderDiv.textContent = msg.sender || 'Anonymous';
+
+      const replyBtn = document.createElement('button');
+      replyBtn.type = 'button';
+      replyBtn.className = 'reply-btn';
+      replyBtn.textContent = 'Reply';
+      replyBtn.onclick = () => setReplyTarget(msg);
+
+      headerRow.appendChild(senderDiv);
+      headerRow.appendChild(replyBtn);
+      bubble.appendChild(headerRow);
+
+      // If this message is a reply to another message
+      if (msg.replyTo) {
+        const quoteDiv = document.createElement('div');
+        quoteDiv.className = 'reply-quote';
+
+        const quoteSender = document.createElement('div');
+        quoteSender.className = 'reply-quote-sender';
+        quoteSender.textContent = msg.replyTo.sender || 'Anonymous';
+
+        const quoteText = document.createElement('div');
+        quoteText.className = 'reply-quote-text';
+        quoteText.textContent = msg.replyTo.text || '';
+
+        quoteDiv.appendChild(quoteSender);
+        quoteDiv.appendChild(quoteText);
+        bubble.appendChild(quoteDiv);
+      }
 
       const textDiv = document.createElement('div');
       textDiv.textContent = msg.text;
@@ -414,7 +627,6 @@
       const timeStr = msg.timestamp ? new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
       timeDiv.textContent = timeStr;
 
-      bubble.appendChild(senderDiv);
       bubble.appendChild(textDiv);
       bubble.appendChild(timeDiv);
 
@@ -437,10 +649,12 @@
         id: Date.now().toString() + Math.random().toString(36).substring(2, 6),
         sender: currentUsername,
         text: text,
+        replyTo: activeReply || null,
         timestamp: new Date().toISOString()
       };
 
       input.value = '';
+      cancelReply();
 
       // Optimistic update
       localMessages.push(newMessage);

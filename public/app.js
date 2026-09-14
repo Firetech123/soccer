@@ -2,6 +2,7 @@ let socket = null;
 let typingTimeout = null;
 let isTyping = false;
 let currentUsername = '';
+let activeReply = null;
 
 document.addEventListener('DOMContentLoaded', () => {
   const savedName = localStorage.getItem('chat_username');
@@ -82,17 +83,76 @@ function setupSocket() {
   });
 }
 
+function setReplyTarget(msg) {
+  activeReply = {
+    id: msg.id,
+    sender: msg.sender || 'Anonymous',
+    text: msg.text
+  };
+
+  const previewBar = document.getElementById('reply-preview-bar');
+  const previewSender = document.getElementById('reply-preview-sender');
+  const previewText = document.getElementById('reply-preview-text');
+
+  previewSender.textContent = `Replying to ${activeReply.sender}`;
+  previewText.textContent = activeReply.text;
+  previewBar.classList.remove('hidden');
+
+  const input = document.getElementById('message-input');
+  input.focus();
+}
+
+function cancelReply() {
+  activeReply = null;
+  const previewBar = document.getElementById('reply-preview-bar');
+  if (previewBar) {
+    previewBar.classList.add('hidden');
+  }
+}
+
 function appendMessage(msg) {
   const container = document.getElementById('chat-messages');
-  // Compare socket or message sender display
   const isSent = msg.sender === currentUsername;
 
   const bubble = document.createElement('div');
   bubble.className = `message-bubble ${isSent ? 'sent' : 'received'}`;
+  bubble.dataset.id = msg.id;
+
+  // Header row with sender & reply action
+  const headerRow = document.createElement('div');
+  headerRow.className = 'message-header-row';
 
   const senderDiv = document.createElement('div');
   senderDiv.className = 'message-sender';
   senderDiv.textContent = msg.sender || 'Anonymous';
+
+  const replyBtn = document.createElement('button');
+  replyBtn.type = 'button';
+  replyBtn.className = 'reply-btn';
+  replyBtn.textContent = 'Reply';
+  replyBtn.onclick = () => setReplyTarget(msg);
+
+  headerRow.appendChild(senderDiv);
+  headerRow.appendChild(replyBtn);
+  bubble.appendChild(headerRow);
+
+  // If this message is a reply to another message
+  if (msg.replyTo) {
+    const quoteDiv = document.createElement('div');
+    quoteDiv.className = 'reply-quote';
+
+    const quoteSender = document.createElement('div');
+    quoteSender.className = 'reply-quote-sender';
+    quoteSender.textContent = msg.replyTo.sender || 'Anonymous';
+
+    const quoteText = document.createElement('div');
+    quoteText.className = 'reply-quote-text';
+    quoteText.textContent = msg.replyTo.text || '';
+
+    quoteDiv.appendChild(quoteSender);
+    quoteDiv.appendChild(quoteText);
+    bubble.appendChild(quoteDiv);
+  }
 
   const textDiv = document.createElement('div');
   textDiv.textContent = msg.text;
@@ -102,7 +162,6 @@ function appendMessage(msg) {
   const timeStr = new Date(msg.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
   timeDiv.textContent = timeStr;
 
-  bubble.appendChild(senderDiv);
   bubble.appendChild(textDiv);
   bubble.appendChild(timeDiv);
 
@@ -121,8 +180,14 @@ function handleSendMessage(e) {
 
   if (!text || !socket) return;
 
-  socket.emit('send_message', { text });
+  const payload = { text };
+  if (activeReply) {
+    payload.replyTo = activeReply;
+  }
+
+  socket.emit('send_message', payload);
   input.value = '';
+  cancelReply();
 
   if (isTyping) {
     socket.emit('stop_typing');

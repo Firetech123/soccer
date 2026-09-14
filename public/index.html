@@ -62,6 +62,15 @@
         </div>
       </div>
 
+      <!-- Reply Preview Bar -->
+      <div id="reply-preview-bar" class="reply-preview-bar hidden">
+        <div class="reply-preview-info">
+          <span class="reply-preview-title" id="reply-preview-sender">Replying to ...</span>
+          <span class="reply-preview-snippet" id="reply-preview-text">...</span>
+        </div>
+        <button type="button" class="cancel-reply-btn" onclick="cancelReply()" title="Cancel reply">&times;</button>
+      </div>
+
       <!-- Chat Input Form -->
       <form id="chat-form" class="chat-input-area" onsubmit="handleSendMessage(event)">
         <input
