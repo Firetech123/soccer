@@ -39,6 +39,12 @@
 
     <!-- Chat Screen -->
     <div id="chat-screen" class="card chat-card hidden">
+      <!-- Drag Overlay -->
+      <div class="drag-overlay" id="drag-overlay">
+        <span style="font-size: 28px;">📷</span>
+        <span>Drop image here to attach</span>
+      </div>
+
       <!-- Chat Header -->
       <div class="chat-header">
         <div class="user-info">
@@ -65,6 +71,15 @@
         </div>
       </div>
 
+      <!-- Image Preview Bar -->
+      <div id="image-preview-bar" class="image-preview-bar hidden">
+        <div class="image-preview-wrapper">
+          <img id="image-preview-img" src="" alt="Selected Attachment">
+          <button type="button" class="remove-image-btn" onclick="removeAttachedImage()" title="Remove image">&times;</button>
+        </div>
+        <span id="image-preview-name" class="image-preview-name">image.png</span>
+      </div>
+
       <!-- Reply Preview Bar -->
       <div id="reply-preview-bar" class="reply-preview-bar hidden">
         <div class="reply-preview-info">
@@ -85,6 +100,8 @@
 
       <!-- Chat Input Form -->
       <form id="chat-form" class="chat-input-area" onsubmit="handleSendMessage(event)">
+        <input type="file" id="image-file-input" accept="image/*" class="hidden" onchange="handleImageFileSelect(event)">
+        <button type="button" class="image-attach-btn" onclick="document.getElementById('image-file-input').click()" title="Attach image">📷</button>
         <input
           type="text"
           id="message-input"
