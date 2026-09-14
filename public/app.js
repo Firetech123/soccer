@@ -161,12 +161,29 @@ async function initChat() {
   setInterval(pollSignals, 1500);
 }
 
+const RETENTION_MS = 24 * 60 * 60 * 1000;
+
+function filterExpiredMessagesClient(messages) {
+  if (!Array.isArray(messages)) return [];
+  const now = Date.now();
+  return messages.filter(item => {
+    if (!item) return false;
+    let time = item.timestamp ? new Date(item.timestamp).getTime() : null;
+    if (!time && item.id && !isNaN(Number(item.id.slice(0, 13)))) {
+      time = Number(item.id.slice(0, 13));
+    }
+    if (!time) return true;
+    return now - time < RETENTION_MS;
+  });
+}
+
 async function loadMessages() {
   try {
     const res = await fetch('/api/messages');
     if (!res.ok) return;
 
-    const messages = await res.json();
+    let messages = await res.json();
+    messages = filterExpiredMessagesClient(messages);
     const container = document.getElementById('chat-messages');
     container.innerHTML = '';
     messages.forEach(appendMessage);

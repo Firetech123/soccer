@@ -15,16 +15,48 @@ app.use(cors());
 app.use(express.json());
 app.use(express.static(path.join(__dirname, '../public')));
 
+const RETENTION_MS = 24 * 60 * 60 * 1000; // 24 hours
+
+// Helper to filter out messages older than 24 hours
+function filterExpiredMessages(messages) {
+  if (!Array.isArray(messages)) return [];
+  const now = Date.now();
+  return messages.filter(item => {
+    if (!item) return false;
+    let time = item.timestamp ? new Date(item.timestamp).getTime() : null;
+    if (!time && item.id && !isNaN(Number(item.id.slice(0, 13)))) {
+      time = Number(item.id.slice(0, 13));
+    }
+    if (!time) return true;
+    return now - time < RETENTION_MS;
+  });
+}
+
 // Helper to load messages from Cloudflare KV
 async function getMessages() {
   const msgs = await KVStore.get('messages');
-  return Array.isArray(msgs) ? msgs : [];
+  const validMsgs = Array.isArray(msgs) ? msgs : [];
+  const filtered = filterExpiredMessages(validMsgs);
+  if (filtered.length !== validMsgs.length) {
+    await KVStore.put('messages', filtered);
+  }
+  return filtered;
 }
 
 // Helper to save messages to Cloudflare KV
 async function saveMessages(messages) {
-  await KVStore.put('messages', messages);
+  const filtered = filterExpiredMessages(messages);
+  await KVStore.put('messages', filtered);
 }
+
+// Periodic background cleanup for 24-hour expiration
+setInterval(async () => {
+  try {
+    await getMessages();
+  } catch (err) {
+    console.error('Error during periodic message cleanup:', err);
+  }
+}, 60 * 60 * 1000); // Hourly cleanup
 
 // REST Endpoints
 
