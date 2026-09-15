@@ -3,7 +3,7 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <title>Real-Time Chat</title>
+  <title>Real-Time Chat & Direct Messaging</title>
   <link rel="icon" type="image/jpeg" href="logo.jpg">
   <link rel="stylesheet" href="style.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -12,32 +12,57 @@
 </head>
 <body class="dark-theme">
   <div class="app-container">
-    <!-- Name Prompt Screen -->
-    <div id="join-screen" class="card prompt-card">
+
+    <!-- Auth Screen (Sign In / Sign Up) -->
+    <div id="auth-screen" class="card prompt-card">
       <div class="prompt-header">
         <div class="logo-icon">
           <img src="logo.jpg" alt="Fire Tech Logo" class="logo-img">
         </div>
-        <h2>Welcome to Chat</h2>
-        <p class="subtitle">Please enter your name to start chatting</p>
+        <h2 id="auth-title">Log In to Chat</h2>
+        <p class="subtitle" id="auth-subtitle">Enter your account details to start messaging</p>
       </div>
-      <form id="join-form" class="prompt-form" onsubmit="handleJoinChat(event)">
+
+      <div id="auth-error" class="alert error hidden"></div>
+
+      <!-- Login Form -->
+      <form id="login-form" class="prompt-form" onsubmit="handleLogin(event)">
         <div class="input-group">
-          <label for="username-input">Your Name</label>
-          <input
-            type="text"
-            id="username-input"
-            placeholder="Enter your name..."
-            required
-            autocomplete="off"
-            maxlength="25"
-          >
+          <label for="login-username">Username</label>
+          <input type="text" id="login-username" placeholder="Enter username..." required autocomplete="username">
         </div>
-        <button type="submit" class="btn primary-btn">Join Chat</button>
+        <div class="input-group">
+          <label for="login-password">Password</label>
+          <input type="password" id="login-password" placeholder="Enter password..." required autocomplete="current-password">
+        </div>
+        <button type="submit" class="btn primary-btn">Log In</button>
+        <p class="auth-switch-text">Don't have an account? <a href="#" onclick="toggleAuthMode('signup')">Sign Up</a></p>
+      </form>
+
+      <!-- Signup Form -->
+      <form id="signup-form" class="prompt-form hidden" onsubmit="handleSignup(event)">
+        <div class="input-group">
+          <label for="signup-username">Username</label>
+          <input type="text" id="signup-username" placeholder="Choose username (e.g. john_doe)" required autocomplete="username" pattern="[a-zA-Z0-9_]+" title="Letters, numbers and underscores only">
+        </div>
+        <div class="input-group">
+          <label for="signup-displayname">Display Name</label>
+          <input type="text" id="signup-displayname" placeholder="Your full name (e.g. John Doe)" required autocomplete="name">
+        </div>
+        <div class="input-group">
+          <label for="signup-password">Password</label>
+          <input type="password" id="signup-password" placeholder="Choose password (min 4 chars)" required minlength="4" autocomplete="new-password">
+        </div>
+        <div class="input-group">
+          <label for="signup-bio">Bio / Status</label>
+          <input type="text" id="signup-bio" placeholder="Hey there! I am using Chat." value="Hey there! I am using Chat.">
+        </div>
+        <button type="submit" class="btn primary-btn">Create Account</button>
+        <p class="auth-switch-text">Already have an account? <a href="#" onclick="toggleAuthMode('login')">Log In</a></p>
       </form>
     </div>
 
-    <!-- Chat Screen -->
+    <!-- Main Chat Screen (WhatsApp Style layout with Direct Messaging) -->
     <div id="chat-screen" class="card chat-card hidden">
       <!-- Drag Overlay -->
       <div class="drag-overlay" id="drag-overlay">
@@ -45,21 +70,127 @@
         <span>Drop image here to attach</span>
       </div>
 
-      <!-- Chat Header -->
+      <!-- Header with Hamburger Menu and Active Chat Info -->
       <div class="chat-header">
-        <div class="user-info">
-          <img src="logo.jpg" alt="Logo" class="avatar-img">
-          <div>
-            <h3>Anonymous Chat</h3>
-            <span class="status-indicator">
-              <span class="status-dot online"></span> Connected • Messages deleted after 24h
-            </span>
+        <div class="header-left">
+          <button type="button" class="hamburger-btn" onclick="toggleHamburgerMenu(event)" title="Menu">☰</button>
+          <div class="user-info" id="active-chat-info-area" style="cursor: pointer;" onclick="openActiveChatProfileModal()">
+            <img src="logo.jpg" id="active-chat-avatar" alt="Avatar" class="avatar-img">
+            <div>
+              <h3 id="active-chat-name">Select a conversation</h3>
+              <span class="status-indicator" id="active-chat-status">
+                <span class="status-dot online"></span> 1-on-1 Direct Messaging
+              </span>
+            </div>
           </div>
         </div>
-        <div class="call-header-actions">
+        <div class="call-header-actions" id="call-header-actions">
           <button type="button" id="start-voice-call-btn" class="icon-btn" onclick="startCall('voice')" title="Start Voice Call">📞</button>
           <button type="button" id="start-video-call-btn" class="icon-btn" onclick="startCall('video')" title="Start Video Call">📹</button>
         </div>
+      </div>
+
+      <!-- Hamburger Menu Dropdown -->
+      <div id="hamburger-menu" class="hamburger-menu hidden">
+        <div class="hamburger-user-header">
+          <img id="menu-user-avatar" src="logo.jpg" class="avatar-img" alt="Avatar">
+          <div class="hamburger-user-details">
+            <span id="menu-user-name" class="menu-name">Username</span>
+            <span id="menu-user-handle" class="menu-handle">@username</span>
+          </div>
+        </div>
+        <hr class="menu-divider">
+        <button type="button" class="menu-item" onclick="openProfileModal()">
+          <span>👤</span> Edit Profile
+        </button>
+        <button type="button" class="menu-item" onclick="openSecurityModal()">
+          <span>🔒</span> Security (Change Password)
+        </button>
+        <hr class="menu-divider">
+        <button type="button" class="menu-item danger" onclick="handleLogout()">
+          <span>🚪</span> Log Out
+        </button>
+      </div>
+
+      <!-- Main Body Container: Conversations Sidebar & Active Chat Messages -->
+      <div class="chat-body-layout">
+
+        <!-- Left Sidebar: Conversations list & Search -->
+        <div class="conversations-sidebar" id="conversations-sidebar">
+          <div class="search-bar-container">
+            <input type="text" id="user-search-input" placeholder="Search user by username..." oninput="handleUserSearchInput(event)">
+          </div>
+          <div class="conversations-list" id="conversations-list">
+            <!-- Dynamically populated conversations or search results -->
+          </div>
+        </div>
+
+        <!-- Right Main: Active Chat Area -->
+        <div class="active-chat-area" id="active-chat-area">
+          <div id="no-chat-selected" class="no-chat-selected-view">
+            <div class="no-chat-icon">💬</div>
+            <h3>Your Messages</h3>
+            <p>Search for a user by username or select a conversation to start chatting.</p>
+          </div>
+
+          <div id="chat-messages-container" class="chat-messages-container hidden">
+            <!-- Messages Stream -->
+            <div class="chat-messages" id="chat-messages">
+              <!-- Messages appended dynamically -->
+            </div>
+
+            <!-- Real-Time Typing Indicator -->
+            <div class="typing-container" id="typing-indicator">
+              <span id="typing-text">User is typing...</span>
+              <div class="typing-dots">
+                <span></span><span></span><span></span>
+              </div>
+            </div>
+
+            <!-- Image Preview Bar -->
+            <div id="image-preview-bar" class="image-preview-bar hidden">
+              <div class="image-preview-wrapper">
+                <img id="image-preview-img" src="" alt="Selected Attachment">
+                <button type="button" class="remove-image-btn" onclick="removeAttachedImage()" title="Remove image">&times;</button>
+              </div>
+              <span id="image-preview-name" class="image-preview-name">image.png</span>
+            </div>
+
+            <!-- Reply Preview Bar -->
+            <div id="reply-preview-bar" class="reply-preview-bar hidden">
+              <div class="reply-preview-info">
+                <span class="reply-preview-title" id="reply-preview-sender">Replying to ...</span>
+                <span class="reply-preview-snippet" id="reply-preview-text">...</span>
+              </div>
+              <button type="button" class="cancel-reply-btn" onclick="cancelReply()" title="Cancel reply">&times;</button>
+            </div>
+
+            <!-- Edit Preview Bar -->
+            <div id="edit-preview-bar" class="edit-preview-bar hidden">
+              <div class="edit-preview-info">
+                <span class="edit-preview-title">Editing Message</span>
+                <span class="edit-preview-snippet" id="edit-preview-text">...</span>
+              </div>
+              <button type="button" class="cancel-edit-btn" onclick="cancelEdit()" title="Cancel edit">&times;</button>
+            </div>
+
+            <!-- Chat Input Form -->
+            <form id="chat-form" class="chat-input-area" onsubmit="handleSendMessage(event)">
+              <input type="file" id="image-file-input" accept="image/*" class="hidden" onchange="handleImageFileSelect(event)">
+              <button type="button" class="image-attach-btn" onclick="document.getElementById('image-file-input').click()" title="Attach image">📷</button>
+              <input
+                type="text"
+                id="message-input"
+                placeholder="Type a message..."
+                autocomplete="off"
+                oninput="handleTypingInput()"
+                onclick="this.focus()"
+              >
+              <button type="submit" class="btn primary-btn send-btn">Send</button>
+            </form>
+          </div>
+        </div>
+
       </div>
 
       <!-- Minimized Active Call Floating Bar -->
@@ -74,9 +205,8 @@
         </div>
       </div>
 
-      <!-- WhatsApp Call Full Overlay Modal -->
+      <!-- Call Full Overlay Modal -->
       <div id="call-overlay-modal" class="call-overlay-modal hidden">
-        <!-- Call Header / Top Controls -->
         <div class="call-overlay-header">
           <div class="call-type-badge">
             <span id="call-type-icon">📞</span>
@@ -85,7 +215,6 @@
           <button type="button" class="call-minimize-btn" onclick="minimizeCallOverlay()" title="Minimize Call">🗕</button>
         </div>
 
-        <!-- Video Background Grid (For Video Call Mode) -->
         <div id="call-video-grid" class="call-video-grid hidden">
           <video id="call-remote-video" class="call-remote-video" autoplay playsinline></video>
           <div id="call-local-video-wrapper" class="call-local-video-wrapper">
@@ -93,86 +222,94 @@
           </div>
         </div>
 
-        <!-- Call User Details (Avatar & Status) -->
         <div id="call-user-details" class="call-user-details">
           <div class="call-avatar-wrapper">
             <div id="call-pulse-ring-1" class="call-pulse-ring hidden"></div>
             <div id="call-pulse-ring-2" class="call-pulse-ring hidden"></div>
-            <img src="logo.jpg" alt="Avatar" class="call-avatar-img">
+            <img id="call-avatar-img" src="logo.jpg" alt="Avatar" class="call-avatar-img">
           </div>
-          <div id="call-peer-name" class="call-user-name">Anonymous Chat</div>
+          <div id="call-peer-name" class="call-user-name">User</div>
           <div id="call-status-text" class="call-status-text">Calling...</div>
         </div>
 
-        <!-- In-Call Action Bar Controls -->
         <div class="call-overlay-controls">
-          <!-- Outgoing / Active Call Controls -->
           <button type="button" id="call-toggle-audio-btn" class="call-action-btn" onclick="toggleAudio()" title="Mute/Unmute Audio">🎤</button>
           <button type="button" id="call-toggle-video-btn" class="call-action-btn" onclick="toggleVideo()" title="Camera On/Off">📹</button>
-
-          <!-- Incoming Call Accept Button (Hidden by default) -->
           <button type="button" id="call-accept-btn" class="call-action-btn accept hidden" onclick="acceptCall()" title="Accept Call">📞</button>
-
-          <!-- End / Decline Button -->
           <button type="button" id="call-end-btn" class="call-action-btn end" onclick="handleCallEndOrDecline()" title="End Call">🛑</button>
         </div>
       </div>
-
-      <!-- Messages Stream -->
-      <div class="chat-messages" id="chat-messages">
-        <!-- Messages appended dynamically -->
-      </div>
-
-      <!-- Real-Time Typing Indicator -->
-      <div class="typing-container" id="typing-indicator">
-        <span id="typing-text">Anonymous is typing...</span>
-        <div class="typing-dots">
-          <span></span><span></span><span></span>
-        </div>
-      </div>
-
-      <!-- Image Preview Bar -->
-      <div id="image-preview-bar" class="image-preview-bar hidden">
-        <div class="image-preview-wrapper">
-          <img id="image-preview-img" src="" alt="Selected Attachment">
-          <button type="button" class="remove-image-btn" onclick="removeAttachedImage()" title="Remove image">&times;</button>
-        </div>
-        <span id="image-preview-name" class="image-preview-name">image.png</span>
-      </div>
-
-      <!-- Reply Preview Bar -->
-      <div id="reply-preview-bar" class="reply-preview-bar hidden">
-        <div class="reply-preview-info">
-          <span class="reply-preview-title" id="reply-preview-sender">Replying to ...</span>
-          <span class="reply-preview-snippet" id="reply-preview-text">...</span>
-        </div>
-        <button type="button" class="cancel-reply-btn" onclick="cancelReply()" title="Cancel reply">&times;</button>
-      </div>
-
-      <!-- Edit Preview Bar -->
-      <div id="edit-preview-bar" class="edit-preview-bar hidden">
-        <div class="edit-preview-info">
-          <span class="edit-preview-title">Editing Message</span>
-          <span class="edit-preview-snippet" id="edit-preview-text">...</span>
-        </div>
-        <button type="button" class="cancel-edit-btn" onclick="cancelEdit()" title="Cancel edit">&times;</button>
-      </div>
-
-      <!-- Chat Input Form -->
-      <form id="chat-form" class="chat-input-area" onsubmit="handleSendMessage(event)">
-        <input type="file" id="image-file-input" accept="image/*" class="hidden" onchange="handleImageFileSelect(event)">
-        <button type="button" class="image-attach-btn" onclick="document.getElementById('image-file-input').click()" title="Attach image">📷</button>
-        <input
-          type="text"
-          id="message-input"
-          placeholder="Type a message..."
-          autocomplete="off"
-          oninput="handleTypingInput()"
-          onclick="this.focus()"
-        >
-        <button type="submit" class="btn primary-btn send-btn">Send</button>
-      </form>
     </div>
+
+    <!-- Edit Profile Modal -->
+    <div id="edit-profile-modal" class="modal-backdrop hidden">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h3>Edit Profile</h3>
+          <button type="button" class="modal-close-btn" onclick="closeModal('edit-profile-modal')">&times;</button>
+        </div>
+        <form onsubmit="handleSaveProfile(event)" class="prompt-form">
+          <div class="profile-avatar-edit-preview">
+            <img id="profile-edit-avatar-preview" src="logo.jpg" class="profile-avatar-large" alt="Profile Picture">
+            <input type="file" id="profile-avatar-input" accept="image/*" class="hidden" onchange="handleProfileAvatarSelect(event)">
+            <button type="button" class="btn secondary-btn" onclick="document.getElementById('profile-avatar-input').click()">Change Picture</button>
+          </div>
+          <div class="input-group">
+            <label for="edit-display-name">Display Name</label>
+            <input type="text" id="edit-display-name" required>
+          </div>
+          <div class="input-group">
+            <label for="edit-bio">Bio / Status</label>
+            <input type="text" id="edit-bio" placeholder="Tell something about yourself...">
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn secondary-btn" onclick="closeModal('edit-profile-modal')">Cancel</button>
+            <button type="submit" class="btn primary-btn">Save Changes</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- Security (Change Password) Modal -->
+    <div id="security-modal" class="modal-backdrop hidden">
+      <div class="modal-card">
+        <div class="modal-header">
+          <h3>Security & Password</h3>
+          <button type="button" class="modal-close-btn" onclick="closeModal('security-modal')">&times;</button>
+        </div>
+        <form onsubmit="handleChangePassword(event)" class="prompt-form">
+          <div class="input-group">
+            <label for="current-password">Current Password</label>
+            <input type="password" id="current-password" required autocomplete="current-password">
+          </div>
+          <div class="input-group">
+            <label for="new-password">New Password</label>
+            <input type="password" id="new-password" required minlength="4" autocomplete="new-password">
+          </div>
+          <div class="modal-footer">
+            <button type="button" class="btn secondary-btn" onclick="closeModal('security-modal')">Cancel</button>
+            <button type="submit" class="btn primary-btn">Update Password</button>
+          </div>
+        </form>
+      </div>
+    </div>
+
+    <!-- View User Profile Modal -->
+    <div id="view-profile-modal" class="modal-backdrop hidden">
+      <div class="modal-card view-profile-card">
+        <div class="modal-header">
+          <h3>User Profile</h3>
+          <button type="button" class="modal-close-btn" onclick="closeModal('view-profile-modal')">&times;</button>
+        </div>
+        <div class="view-profile-content">
+          <img id="view-profile-avatar" src="logo.jpg" class="profile-avatar-large" alt="User Avatar">
+          <h2 id="view-profile-displayname">Display Name</h2>
+          <span id="view-profile-username" class="profile-username-handle">@username</span>
+          <p id="view-profile-bio" class="profile-bio-text">Bio text here...</p>
+        </div>
+      </div>
+    </div>
+
   </div>
 
   <script src="/socket.io/socket.io.js"></script>

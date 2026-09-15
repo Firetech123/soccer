@@ -3,13 +3,16 @@ const MAX_IMAGE_SIZE_BYTES = 5 * 1024 * 1024; // 5MB limit
 let socket = null;
 let typingTimeout = null;
 let isTyping = false;
-let currentUsername = '';
+let currentUser = null; // { username, displayName, bio, avatar }
+let authToken = localStorage.getItem('chat_token') || null;
+let activeRecipient = null; // target user object
 let activeReply = null;
 let activeEdit = null;
 let pressTimer = null;
 let activeMenu = null;
 let pendingImageBase64 = null;
 let pendingImageName = '';
+let searchTimeout = null;
 
 // WebRTC & Call State Variables
 const RTC_CONFIG = {
@@ -31,25 +34,499 @@ let callDurationSeconds = 0;
 let processedSignalIds = new Set();
 let pendingIceCandidates = [];
 let signalQueue = Promise.resolve();
+let editedAvatarBase64 = null;
 
-document.addEventListener('DOMContentLoaded', () => {
+document.addEventListener('DOMContentLoaded', async () => {
   setupDragAndDropAndPaste();
-  const savedName = localStorage.getItem('chat_username');
-  if (savedName && savedName.trim()) {
-    currentUsername = savedName.trim();
-    document.getElementById('join-screen').classList.add('hidden');
-    document.getElementById('chat-screen').classList.remove('hidden');
-    initChat();
-  } else {
-    document.getElementById('username-input').focus();
+
+  // Close menus on outside click
+  document.addEventListener('click', (e) => {
+    const menu = document.getElementById('hamburger-menu');
+    const hamburgerBtn = document.querySelector('.hamburger-btn');
+    if (menu && !menu.classList.contains('hidden') && !menu.contains(e.target) && !hamburgerBtn.contains(e.target)) {
+      menu.classList.add('hidden');
+    }
+  });
+
+  if (authToken) {
+    const verified = await checkAuthSession();
+    if (verified) {
+      showChatScreen();
+      return;
+    }
   }
+
+  showAuthScreen();
 });
+
+// Authentication Handlers
+
+function toggleAuthMode(mode) {
+  const loginForm = document.getElementById('login-form');
+  const signupForm = document.getElementById('signup-form');
+  const title = document.getElementById('auth-title');
+  const subtitle = document.getElementById('auth-subtitle');
+  const errorDiv = document.getElementById('auth-error');
+
+  errorDiv.classList.add('hidden');
+  errorDiv.textContent = '';
+
+  if (mode === 'signup') {
+    loginForm.classList.add('hidden');
+    signupForm.classList.remove('hidden');
+    title.textContent = 'Create an Account';
+    subtitle.textContent = 'Sign up with a username and password to get started';
+  } else {
+    signupForm.classList.add('hidden');
+    loginForm.classList.remove('hidden');
+    title.textContent = 'Log In to Chat';
+    subtitle.textContent = 'Enter your account details to start messaging';
+  }
+}
+
+async function checkAuthSession() {
+  try {
+    const res = await fetch('/api/users/me', {
+      headers: { 'Authorization': `Bearer ${authToken}` }
+    });
+    if (res.ok) {
+      currentUser = await res.json();
+      return true;
+    }
+  } catch (err) {
+    console.error('Session check failed:', err);
+  }
+  localStorage.removeItem('chat_token');
+  authToken = null;
+  currentUser = null;
+  return false;
+}
+
+async function handleLogin(e) {
+  e.preventDefault();
+  const username = document.getElementById('login-username').value.trim();
+  const password = document.getElementById('login-password').value;
+  const errorDiv = document.getElementById('auth-error');
+
+  errorDiv.classList.add('hidden');
+
+  try {
+    const res = await fetch('/api/auth/login', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, password })
+    });
+    const data = await res.json();
+
+    if (!res.ok) {
+      errorDiv.textContent = data.error || 'Failed to log in.';
+      errorDiv.classList.remove('hidden');
+      return;
+    }
+
+    authToken = data.token;
+    currentUser = data.user;
+    localStorage.setItem('chat_token', authToken);
+
+    showChatScreen();
+  } catch (err) {
+    errorDiv.textContent = 'Network error. Please try again.';
+    errorDiv.classList.remove('hidden');
+  }
+}
+
+async function handleSignup(e) {
+  e.preventDefault();
+  const username = document.getElementById('signup-username').value.trim();
+  const displayName = document.getElementById('signup-displayname').value.trim();
+  const password = document.getElementById('signup-password').value;
+  const bio = document.getElementById('signup-bio').value.trim();
+  const errorDiv = document.getElementById('auth-error');
+
+  errorDiv.classList.add('hidden');
+
+  try {
+    const res = await fetch('/api/auth/signup', {
+      method: 'POST',
+      headers: { 'Content-Type': 'application/json' },
+      body: JSON.stringify({ username, displayName, password, bio })
+    });
+    const data = await res.json();
+
+    if (!res.ok) {
+      errorDiv.textContent = data.error || 'Failed to sign up.';
+      errorDiv.classList.remove('hidden');
+      return;
+    }
+
+    authToken = data.token;
+    currentUser = data.user;
+    localStorage.setItem('chat_token', authToken);
+
+    showChatScreen();
+  } catch (err) {
+    errorDiv.textContent = 'Network error. Please try again.';
+    errorDiv.classList.remove('hidden');
+  }
+}
+
+function handleLogout() {
+  localStorage.removeItem('chat_token');
+  authToken = null;
+  currentUser = null;
+  activeRecipient = null;
+  if (socket) socket.disconnect();
+  showAuthScreen();
+  showToast('Logged out successfully.');
+}
+
+function showAuthScreen() {
+  document.getElementById('auth-screen').classList.remove('hidden');
+  document.getElementById('chat-screen').classList.add('hidden');
+  toggleAuthMode('login');
+}
+
+function showChatScreen() {
+  document.getElementById('auth-screen').classList.add('hidden');
+  document.getElementById('chat-screen').classList.remove('hidden');
+
+  updateHamburgerUserInfo();
+  setupSocket();
+  loadConversations();
+  setInterval(pollSignals, 1500);
+}
+
+function updateHamburgerUserInfo() {
+  if (!currentUser) return;
+  document.getElementById('menu-user-name').textContent = currentUser.displayName || currentUser.username;
+  document.getElementById('menu-user-handle').textContent = `@${currentUser.username}`;
+  document.getElementById('menu-user-avatar').src = currentUser.avatar || 'logo.jpg';
+}
+
+function toggleHamburgerMenu(e) {
+  e.stopPropagation();
+  const menu = document.getElementById('hamburger-menu');
+  menu.classList.toggle('hidden');
+}
+
+// Profile & Security Modals
+
+function openProfileModal() {
+  document.getElementById('hamburger-menu').classList.add('hidden');
+  document.getElementById('edit-display-name').value = currentUser.displayName || '';
+  document.getElementById('edit-bio').value = currentUser.bio || '';
+  document.getElementById('profile-edit-avatar-preview').src = currentUser.avatar || 'logo.jpg';
+  editedAvatarBase64 = null;
+  document.getElementById('edit-profile-modal').classList.remove('hidden');
+}
+
+function openSecurityModal() {
+  document.getElementById('hamburger-menu').classList.add('hidden');
+  document.getElementById('current-password').value = '';
+  document.getElementById('new-password').value = '';
+  document.getElementById('security-modal').classList.remove('hidden');
+}
+
+function closeModal(modalId) {
+  document.getElementById(modalId).classList.add('hidden');
+}
+
+function handleProfileAvatarSelect(e) {
+  const file = e.target.files[0];
+  if (!file) return;
+  if (!file.type.startsWith('image/')) {
+    showToast('Please select a valid image file');
+    return;
+  }
+  if (file.size > MAX_IMAGE_SIZE_BYTES) {
+    showToast('Image size exceeds 5MB limit');
+    return;
+  }
+
+  const reader = new FileReader();
+  reader.onload = function(evt) {
+    editedAvatarBase64 = evt.target.result;
+    document.getElementById('profile-edit-avatar-preview').src = editedAvatarBase64;
+  };
+  reader.readAsDataURL(file);
+}
+
+async function handleSaveProfile(e) {
+  e.preventDefault();
+  const displayName = document.getElementById('edit-display-name').value.trim();
+  const bio = document.getElementById('edit-bio').value.trim();
+
+  const payload = { displayName, bio };
+  if (editedAvatarBase64) {
+    payload.avatar = editedAvatarBase64;
+  }
+
+  try {
+    const res = await fetch('/api/users/me', {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${authToken}`
+      },
+      body: JSON.stringify(payload)
+    });
+
+    if (res.ok) {
+      currentUser = await res.json();
+      updateHamburgerUserInfo();
+      closeModal('edit-profile-modal');
+      showToast('Profile updated successfully!');
+    } else {
+      const errData = await res.json();
+      showToast(errData.error || 'Failed to update profile');
+    }
+  } catch (err) {
+    showToast('Network error while updating profile');
+  }
+}
+
+async function handleChangePassword(e) {
+  e.preventDefault();
+  const currentPassword = document.getElementById('current-password').value;
+  const newPassword = document.getElementById('new-password').value;
+
+  try {
+    const res = await fetch('/api/users/me/password', {
+      method: 'PUT',
+      headers: {
+        'Content-Type': 'application/json',
+        'Authorization': `Bearer ${authToken}`
+      },
+      body: JSON.stringify({ currentPassword, newPassword })
+    });
+
+    const data = await res.json();
+    if (res.ok) {
+      closeModal('security-modal');
+      showToast('Password updated successfully!');
+    } else {
+      showToast(data.error || 'Failed to change password');
+    }
+  } catch (err) {
+    showToast('Network error while updating password');
+  }
+}
+
+async function viewUserProfile(targetUsername) {
+  try {
+    const res = await fetch(`/api/users/${encodeURIComponent(targetUsername)}`, {
+      headers: { 'Authorization': `Bearer ${authToken}` }
+    });
+    if (!res.ok) {
+      showToast('User profile not found');
+      return;
+    }
+    const userObj = await res.json();
+
+    document.getElementById('view-profile-avatar').src = userObj.avatar || 'logo.jpg';
+    document.getElementById('view-profile-displayname').textContent = userObj.displayName || userObj.username;
+    document.getElementById('view-profile-username').textContent = `@${userObj.username}`;
+    document.getElementById('view-profile-bio').textContent = userObj.bio || 'No bio provided.';
+
+    document.getElementById('view-profile-modal').classList.remove('hidden');
+  } catch (err) {
+    showToast('Failed to load user profile');
+  }
+}
+
+function openActiveChatProfileModal() {
+  if (activeRecipient) {
+    viewUserProfile(activeRecipient.username);
+  }
+}
+
+// User Search & Conversation List
+
+async function loadConversations() {
+  try {
+    const res = await fetch('/api/conversations', {
+      headers: { 'Authorization': `Bearer ${authToken}` }
+    });
+    if (!res.ok) return;
+
+    const conversations = await res.json();
+    renderConversationsList(conversations);
+  } catch (err) {
+    console.error('Error loading conversations:', err);
+  }
+}
+
+function renderConversationsList(conversations) {
+  const container = document.getElementById('conversations-list');
+  container.innerHTML = '';
+
+  if (conversations.length === 0) {
+    container.innerHTML = '<div style="padding: 16px; font-size: 13px; color: var(--text-muted); text-align: center;">No conversations yet. Search for a user above to chat!</div>';
+    return;
+  }
+
+  conversations.forEach(c => {
+    const user = c.user;
+    const item = document.createElement('div');
+    item.className = `conversation-item ${activeRecipient && activeRecipient.username === user.username ? 'active' : ''}`;
+    item.onclick = () => selectConversation(user);
+
+    const timeStr = c.lastMessage ? new Date(c.lastMessage.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
+
+    item.innerHTML = `
+      <img src="${user.avatar || 'logo.jpg'}" class="avatar-img" alt="${user.displayName}">
+      <div class="conversation-details">
+        <div class="conversation-name-row">
+          <span class="conversation-name">${user.displayName || user.username}</span>
+          <span class="conversation-time">${timeStr}</span>
+        </div>
+        <div class="conversation-preview">${c.lastMessage ? (c.lastMessage.text.includes('data:image/') ? '📷 Photo' : c.lastMessage.text) : ''}</div>
+      </div>
+    `;
+    container.appendChild(item);
+  });
+}
+
+function handleUserSearchInput(e) {
+  const query = e.target.value.trim();
+  clearTimeout(searchTimeout);
+
+  if (!query) {
+    loadConversations();
+    return;
+  }
+
+  searchTimeout = setTimeout(async () => {
+    try {
+      const res = await fetch(`/api/users/search?q=${encodeURIComponent(query)}`, {
+        headers: { 'Authorization': `Bearer ${authToken}` }
+      });
+      if (!res.ok) return;
+
+      const results = await res.json();
+      renderSearchResults(results);
+    } catch (err) {
+      console.error('Error searching users:', err);
+    }
+  }, 300);
+}
+
+function renderSearchResults(results) {
+  const container = document.getElementById('conversations-list');
+  container.innerHTML = '<div class="search-section-title">Search Results</div>';
+
+  if (results.length === 0) {
+    container.innerHTML += '<div style="padding: 12px; font-size: 13px; color: var(--text-muted); text-align: center;">No users found</div>';
+    return;
+  }
+
+  results.forEach(user => {
+    const item = document.createElement('div');
+    item.className = 'conversation-item';
+    item.onclick = () => selectConversation(user);
+
+    item.innerHTML = `
+      <img src="${user.avatar || 'logo.jpg'}" class="avatar-img" alt="${user.displayName}">
+      <div class="conversation-details">
+        <div class="conversation-name">${user.displayName || user.username}</div>
+        <div class="conversation-preview">@${user.username} • ${user.bio || ''}</div>
+      </div>
+    `;
+    container.appendChild(item);
+  });
+}
+
+async function selectConversation(userObj) {
+  activeRecipient = userObj;
+  document.getElementById('no-chat-selected').classList.add('hidden');
+  document.getElementById('chat-messages-container').classList.remove('hidden');
+
+  document.getElementById('active-chat-name').textContent = userObj.displayName || userObj.username;
+  document.getElementById('active-chat-avatar').src = userObj.avatar || 'logo.jpg';
+  document.getElementById('active-chat-status').innerHTML = `<span class="status-dot online"></span> @${userObj.username}`;
+
+  // Reset conversation list highlighting
+  const searchInput = document.getElementById('user-search-input');
+  if (searchInput.value) {
+    searchInput.value = '';
+    loadConversations();
+  }
+
+  await loadDirectMessages(userObj.username);
+}
+
+// 1-on-1 Direct Messaging Functions
+
+async function loadDirectMessages(recipientUsername) {
+  try {
+    const res = await fetch(`/api/messages/${encodeURIComponent(recipientUsername)}`, {
+      headers: { 'Authorization': `Bearer ${authToken}` }
+    });
+    if (!res.ok) return;
+
+    const messages = await res.json();
+    const container = document.getElementById('chat-messages');
+    container.innerHTML = '';
+    messages.forEach(appendMessage);
+    scrollToBottom();
+  } catch (err) {
+    console.error('Error loading direct messages:', err);
+  }
+}
+
+function setupSocket() {
+  if (socket) socket.disconnect();
+
+  socket = io({
+    auth: { token: authToken }
+  });
+
+  socket.on('connect_error', (err) => {
+    console.error('Socket connection error:', err.message);
+  });
+
+  socket.on('new_message', (msg) => {
+    if (activeRecipient && (msg.sender.toLowerCase() === activeRecipient.username.toLowerCase() || msg.recipient.toLowerCase() === activeRecipient.username.toLowerCase())) {
+      appendMessage(msg);
+      scrollToBottom();
+    }
+    loadConversations();
+  });
+
+  socket.on('message_edited', (msg) => {
+    if (activeRecipient && (msg.sender.toLowerCase() === activeRecipient.username.toLowerCase() || msg.recipient.toLowerCase() === activeRecipient.username.toLowerCase())) {
+      updateMessageInDOM(msg);
+    }
+    loadConversations();
+  });
+
+  socket.on('message_deleted', (data) => {
+    if (activeRecipient && (data.recipient.toLowerCase() === activeRecipient.username.toLowerCase() || data.recipient.toLowerCase() === currentUser.username.toLowerCase())) {
+      markMessageAsDeletedInDOM(data.id);
+    }
+    loadConversations();
+  });
+
+  socket.on('user_typing', (data) => {
+    if (activeRecipient && data.username.toLowerCase() === activeRecipient.username.toLowerCase()) {
+      const typingIndicator = document.getElementById('typing-indicator');
+      const typingText = document.getElementById('typing-text');
+      typingText.textContent = `${activeRecipient.displayName || activeRecipient.username} is typing...`;
+      typingIndicator.classList.add('active');
+    }
+  });
+
+  socket.on('user_stop_typing', (data) => {
+    if (activeRecipient && data.username.toLowerCase() === activeRecipient.username.toLowerCase()) {
+      document.getElementById('typing-indicator').classList.remove('active');
+    }
+  });
+}
 
 function setupDragAndDropAndPaste() {
   const chatCard = document.getElementById('chat-screen');
   if (!chatCard) return;
 
-  // Drag and drop handlers
   ['dragenter', 'dragover'].forEach(eventName => {
     chatCard.addEventListener(eventName, (e) => {
       e.preventDefault();
@@ -74,7 +551,6 @@ function setupDragAndDropAndPaste() {
     }
   });
 
-  // Clipboard paste listener
   window.addEventListener('paste', (e) => {
     const items = (e.clipboardData || e.originalEvent.clipboardData)?.items;
     if (!items) return;
@@ -95,7 +571,6 @@ function processImageFile(file) {
     showToast('Please select a valid image file');
     return;
   }
-
   if (file.size > MAX_IMAGE_SIZE_BYTES) {
     showToast('Image size exceeds 5MB limit');
     return;
@@ -107,9 +582,6 @@ function processImageFile(file) {
     pendingImageName = file.name || 'Pasted Image';
     showImagePreviewBar(pendingImageBase64, pendingImageName);
   };
-  reader.onerror = function() {
-    showToast('Failed to read image file');
-  };
   reader.readAsDataURL(file);
 }
 
@@ -118,7 +590,7 @@ function handleImageFileSelect(e) {
   if (file) {
     processImageFile(file);
   }
-  e.target.value = ''; // reset input
+  e.target.value = '';
 }
 
 function showImagePreviewBar(base64Data, fileName) {
@@ -140,101 +612,8 @@ function removeAttachedImage() {
   if (bar) bar.classList.add('hidden');
 }
 
-function handleJoinChat(e) {
-  e.preventDefault();
-  const input = document.getElementById('username-input');
-  const name = input.value.trim();
-  if (!name) return;
-
-  currentUsername = name;
-  localStorage.setItem('chat_username', name);
-
-  document.getElementById('join-screen').classList.add('hidden');
-  document.getElementById('chat-screen').classList.remove('hidden');
-
-  initChat();
-}
-
-async function initChat() {
-  await loadMessages();
-  setupSocket();
-  setInterval(pollSignals, 1500);
-}
-
-const RETENTION_MS = 24 * 60 * 60 * 1000;
-
-function filterExpiredMessagesClient(messages) {
-  if (!Array.isArray(messages)) return [];
-  const now = Date.now();
-  return messages.filter(item => {
-    if (!item) return false;
-    let time = item.timestamp ? new Date(item.timestamp).getTime() : null;
-    if (!time && item.id && !isNaN(Number(item.id.slice(0, 13)))) {
-      time = Number(item.id.slice(0, 13));
-    }
-    if (!time) return true;
-    return now - time < RETENTION_MS;
-  });
-}
-
-async function loadMessages() {
-  try {
-    const res = await fetch('/api/messages');
-    if (!res.ok) return;
-
-    let messages = await res.json();
-    messages = filterExpiredMessagesClient(messages);
-    const container = document.getElementById('chat-messages');
-    container.innerHTML = '';
-    messages.forEach(appendMessage);
-    scrollToBottom();
-  } catch (err) {
-    console.error('Error loading messages:', err);
-  }
-}
-
-function setupSocket() {
-  if (socket) socket.disconnect();
-
-  socket = io({
-    auth: { username: currentUsername }
-  });
-
-  socket.on('connect_error', (err) => {
-    console.error('Socket connection error:', err.message);
-  });
-
-  socket.on('new_message', (msg) => {
-    appendMessage(msg);
-    scrollToBottom();
-  });
-
-  socket.on('message_edited', (msg) => {
-    updateMessageInDOM(msg);
-  });
-
-  socket.on('message_deleted', (data) => {
-    markMessageAsDeletedInDOM(data.id);
-  });
-
-  socket.on('user_typing', (data) => {
-    if (data.socketId !== socket.id) {
-      const typingIndicator = document.getElementById('typing-indicator');
-      const typingText = document.getElementById('typing-text');
-      typingText.textContent = `${data.username || 'Anonymous'} is typing...`;
-      typingIndicator.classList.add('active');
-    }
-  });
-
-  socket.on('user_stop_typing', (data) => {
-    if (data.socketId !== socket.id) {
-      document.getElementById('typing-indicator').classList.remove('active');
-    }
-  });
-}
-
 /* ==========================================================================
-   WhatsApp Voice & Video Call Implementation
+   Voice & Video Call Implementation
    ========================================================================== */
 
 function formatDuration(seconds) {
@@ -282,7 +661,7 @@ function sendSignal(signalData) {
       const signalObj = {
         id: now.toString() + Math.random().toString(36).substring(2, 6),
         timestamp: now,
-        sender: currentUsername,
+        sender: currentUser ? currentUser.username : 'Anonymous',
         ...signalData
       };
 
@@ -304,7 +683,7 @@ function sendSignal(signalData) {
 }
 
 async function pollSignals() {
-  if (!currentUsername) return;
+  if (!currentUser) return;
 
   try {
     const res = await fetch(`${WORKER_URL}?key=webrtc_signals`);
@@ -318,7 +697,7 @@ async function pollSignals() {
 
     for (const signal of signals) {
       if (!signal || !signal.id || processedSignalIds.has(signal.id)) continue;
-      if (signal.sender === currentUsername) continue;
+      if (signal.sender === currentUser.username) continue;
 
       processedSignalIds.add(signal.id);
 
@@ -379,10 +758,7 @@ async function processPendingIceCandidates() {
 
 async function setupLocalMedia(type) {
   try {
-    const constraints = {
-      audio: true,
-      video: type === 'video'
-    };
+    const constraints = { audio: true, video: type === 'video' };
     localStream = await navigator.mediaDevices.getUserMedia(constraints);
 
     if (type === 'video') {
@@ -437,6 +813,10 @@ function createPeerConnection() {
 }
 
 async function startCall(type = 'voice') {
+  if (!activeRecipient) {
+    showToast('Select a conversation to start a call');
+    return;
+  }
   if (currentCallState !== 'idle') {
     showToast('Already in a call');
     return;
@@ -446,6 +826,8 @@ async function startCall(type = 'voice') {
   currentCallState = 'outgoing_calling';
   currentCallId = 'call_' + Date.now() + '_' + Math.random().toString(36).substring(2, 6);
 
+  document.getElementById('call-peer-name').textContent = activeRecipient.displayName || activeRecipient.username;
+  document.getElementById('call-avatar-img').src = activeRecipient.avatar || 'logo.jpg';
   updateCallOverlayUI();
   document.getElementById('call-overlay-modal').classList.remove('hidden');
 
@@ -558,7 +940,6 @@ function onCallConnected() {
 }
 
 function updateCallOverlayUI() {
-  const modal = document.getElementById('call-overlay-modal');
   const callTypeIcon = document.getElementById('call-type-icon');
   const callTypeTitle = document.getElementById('call-type-title');
   const statusText = document.getElementById('call-status-text');
@@ -571,7 +952,7 @@ function updateCallOverlayUI() {
 
   const isVideo = currentCallType === 'video';
   callTypeIcon.textContent = isVideo ? '📹' : '📞';
-  callTypeTitle.textContent = isVideo ? 'WhatsApp Video Call' : 'WhatsApp Voice Call';
+  callTypeTitle.textContent = isVideo ? 'Video Call' : 'Voice Call';
 
   if (isVideo && currentCallState === 'connected') {
     videoGrid.classList.remove('hidden');
@@ -713,7 +1094,7 @@ function setReplyTarget(msg) {
   cancelEdit();
   activeReply = {
     id: msg.id,
-    sender: msg.sender || 'Anonymous',
+    sender: msg.senderDisplayName || msg.sender,
     text: msg.text
   };
 
@@ -732,9 +1113,7 @@ function setReplyTarget(msg) {
 function cancelReply() {
   activeReply = null;
   const previewBar = document.getElementById('reply-preview-bar');
-  if (previewBar) {
-    previewBar.classList.add('hidden');
-  }
+  if (previewBar) previewBar.classList.add('hidden');
 }
 
 function setEditTarget(msg) {
@@ -755,9 +1134,7 @@ function setEditTarget(msg) {
 function cancelEdit() {
   activeEdit = null;
   const previewBar = document.getElementById('edit-preview-bar');
-  if (previewBar) {
-    previewBar.classList.add('hidden');
-  }
+  if (previewBar) previewBar.classList.add('hidden');
 }
 
 function showToast(message) {
@@ -822,13 +1199,11 @@ function openContextMenu(event, msg) {
   copyBtn.className = 'message-menu-item';
   copyBtn.innerHTML = '<span>📋</span> Copy';
   copyBtn.onclick = () => {
-    const textToCopy = msg.text;
-    navigator.clipboard.writeText(textToCopy).then(() => {
+    navigator.clipboard.writeText(msg.text).then(() => {
       showToast('Copied to clipboard!');
     }).catch(() => {
-      // Fallback
       const textArea = document.createElement('textarea');
-      textArea.value = textToCopy;
+      textArea.value = msg.text;
       document.body.appendChild(textArea);
       textArea.select();
       document.execCommand('copy');
@@ -839,8 +1214,8 @@ function openContextMenu(event, msg) {
   };
   dialog.appendChild(copyBtn);
 
-  // Edit & Delete Options (Only for sender's own messages)
-  if (msg.sender === currentUsername && !msg.isDeleted) {
+  // Edit & Delete Options
+  if (msg.sender.toLowerCase() === currentUser.username.toLowerCase() && !msg.isDeleted) {
     const editBtn = document.createElement('button');
     editBtn.className = 'message-menu-item';
     editBtn.innerHTML = '<span>✏️</span> Edit';
@@ -853,8 +1228,8 @@ function openContextMenu(event, msg) {
     deleteBtn.className = 'message-menu-item danger';
     deleteBtn.innerHTML = '<span>🗑️</span> Delete';
     deleteBtn.onclick = () => {
-      if (socket) {
-        socket.emit('delete_message', { id: msg.id });
+      if (socket && activeRecipient) {
+        socket.emit('delete_message', { id: msg.id, recipient: activeRecipient.username });
       }
       closeContextMenu();
     };
@@ -869,13 +1244,11 @@ function openContextMenu(event, msg) {
 }
 
 function attachHoldAndContextMenuEvents(element, msg) {
-  // Right click context menu for desktop
   element.oncontextmenu = (e) => {
     clearTimeout(pressTimer);
     openContextMenu(e, msg);
   };
 
-  // Long press for touch devices & click-hold
   const startPress = (e) => {
     clearTimeout(pressTimer);
     pressTimer = setTimeout(() => {
@@ -906,19 +1279,19 @@ function appendMessage(msg) {
     return;
   }
 
-  const isSent = msg.sender === currentUsername;
+  const isSent = msg.sender.toLowerCase() === currentUser.username.toLowerCase();
 
   const bubble = document.createElement('div');
   bubble.className = `message-bubble ${isSent ? 'sent' : 'received'}`;
   bubble.dataset.id = msg.id;
 
-  // Header row with sender & reply action
   const headerRow = document.createElement('div');
   headerRow.className = 'message-header-row';
 
   const senderDiv = document.createElement('div');
   senderDiv.className = 'message-sender';
-  senderDiv.textContent = msg.sender || 'Anonymous';
+  senderDiv.textContent = msg.senderDisplayName || msg.sender;
+  senderDiv.onclick = () => viewUserProfile(msg.sender);
 
   const replyBtn = document.createElement('button');
   replyBtn.type = 'button';
@@ -930,14 +1303,13 @@ function appendMessage(msg) {
   headerRow.appendChild(replyBtn);
   bubble.appendChild(headerRow);
 
-  // If this message is a reply to another message
   if (msg.replyTo) {
     const quoteDiv = document.createElement('div');
     quoteDiv.className = 'reply-quote';
 
     const quoteSender = document.createElement('div');
     quoteSender.className = 'reply-quote-sender';
-    quoteSender.textContent = msg.replyTo.sender || 'Anonymous';
+    quoteSender.textContent = msg.replyTo.sender || 'User';
 
     const quoteText = document.createElement('div');
     quoteText.className = 'reply-quote-text';
@@ -1049,10 +1421,12 @@ function scrollToBottom() {
 
 function handleSendMessage(e) {
   e.preventDefault();
+  if (!activeRecipient || !socket) return;
+
   const input = document.getElementById('message-input');
   const captionText = input.value.trim();
 
-  if ((!captionText && !pendingImageBase64) || !socket) return;
+  if (!captionText && !pendingImageBase64) return;
 
   let combinedText = captionText;
   if (pendingImageBase64) {
@@ -1060,18 +1434,18 @@ function handleSendMessage(e) {
   }
 
   if (activeEdit) {
-    socket.emit('edit_message', { id: activeEdit.id, text: combinedText });
+    socket.emit('edit_message', { id: activeEdit.id, recipient: activeRecipient.username, text: combinedText });
     input.value = '';
     removeAttachedImage();
     cancelEdit();
     if (isTyping) {
-      socket.emit('stop_typing');
+      socket.emit('stop_typing', { recipient: activeRecipient.username });
       isTyping = false;
     }
     return;
   }
 
-  const payload = { text: combinedText };
+  const payload = { recipient: activeRecipient.username, text: combinedText };
   if (activeReply) {
     payload.replyTo = activeReply;
   }
@@ -1082,24 +1456,24 @@ function handleSendMessage(e) {
   cancelReply();
 
   if (isTyping) {
-    socket.emit('stop_typing');
+    socket.emit('stop_typing', { recipient: activeRecipient.username });
     isTyping = false;
   }
 }
 
 function handleTypingInput() {
-  if (!socket) return;
+  if (!socket || !activeRecipient) return;
 
   if (!isTyping) {
     isTyping = true;
-    socket.emit('typing');
+    socket.emit('typing', { recipient: activeRecipient.username });
   }
 
   clearTimeout(typingTimeout);
   typingTimeout = setTimeout(() => {
     if (isTyping) {
       isTyping = false;
-      socket.emit('stop_typing');
+      socket.emit('stop_typing', { recipient: activeRecipient.username });
     }
   }, 1500);
 }

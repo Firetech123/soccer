@@ -4,7 +4,7 @@
   "description": "",
   "main": "index.js",
   "scripts": {
-    "test": "node tests/retention.test.js"
+    "test": "node tests/retention.test.js && PORT=3004 node tests/auth.test.js"
   },
   "repository": {
     "type": "git",
