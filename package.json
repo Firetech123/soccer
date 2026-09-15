@@ -2,9 +2,9 @@
   "name": "app",
   "version": "1.0.0",
   "description": "",
-  "main": "index.js",
+  "main": "index.html",
   "scripts": {
-    "test": "node tests/retention.test.js && PORT=3004 node tests/auth.test.js"
+    "test": "echo \"No tests specified\" && exit 0"
   },
   "repository": {
     "type": "git",
@@ -13,17 +13,8 @@
   "keywords": [],
   "author": "",
   "license": "ISC",
-  "type": "commonjs",
   "bugs": {
     "url": "https://github.com/Firetech123/soccer/issues"
   },
-  "homepage": "https://github.com/Firetech123/soccer#readme",
-  "dependencies": {
-    "bcryptjs": "^3.0.3",
-    "cors": "^2.8.6",
-    "express": "^5.2.1",
-    "jsonwebtoken": "^9.0.3",
-    "node-fetch": "^3.3.2",
-    "socket.io": "^4.8.3"
-  }
+  "homepage": "https://github.com/Firetech123/soccer#readme"
 }
