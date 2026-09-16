@@ -736,6 +736,40 @@
       object-fit: cover;
     }
 
+    .unread-badge {
+      background-color: var(--wa-green);
+      color: white;
+      border-radius: 10px;
+      padding: 2px 7px;
+      font-size: 11px;
+      font-weight: 700;
+      min-width: 18px;
+      text-align: center;
+      margin-left: 6px;
+    }
+
+    .notification-banner {
+      position: absolute;
+      top: 60px;
+      left: 50%;
+      transform: translateX(-50%);
+      background-color: #075e54;
+      color: white;
+      padding: 10px 16px;
+      border-radius: 24px;
+      box-shadow: 0 4px 16px rgba(0,0,0,0.3);
+      z-index: 10000;
+      display: flex;
+      align-items: center;
+      gap: 10px;
+      font-size: 13px;
+      cursor: pointer;
+      max-width: 90%;
+      white-space: nowrap;
+      overflow: hidden;
+      text-overflow: ellipsis;
+    }
+
     .hidden {
       display: none !important;
     }
@@ -779,16 +813,8 @@
           <input type="text" id="signup-username" placeholder="Choose a username" required autocomplete="username" pattern="[a-zA-Z0-9_]+" title="Only letters, numbers, and underscores">
         </div>
         <div class="input-group">
-          <label for="signup-displayname">Display Name</label>
-          <input type="text" id="signup-displayname" placeholder="Your full name or handle" required>
-        </div>
-        <div class="input-group">
           <label for="signup-password">Password</label>
           <input type="password" id="signup-password" placeholder="Create password (min 4 chars)" minlength="4" required autocomplete="new-password">
-        </div>
-        <div class="input-group">
-          <label for="signup-bio">Bio / Status</label>
-          <input type="text" id="signup-bio" placeholder="Hey there! I am using FIRE-TECH PRIVATE CHAT." value="Hey there! I am using FIRE-TECH PRIVATE CHAT.">
         </div>
         <button type="submit" class="btn primary-btn" style="margin-top: 8px;">Create Account</button>
       </form>
@@ -796,6 +822,12 @@
 
     <!-- MAIN CHAT & CONVERSATIONS CARD -->
     <div id="chat-screen" class="card chat-card hidden">
+      <!-- TOP NOTIFICATION BANNER -->
+      <div id="notification-banner" class="notification-banner hidden" onclick="handleBannerClick()">
+        <span id="notification-text" style="overflow: hidden; text-overflow: ellipsis;">New message...</span>
+        <button type="button" onclick="event.stopPropagation(); hideNotificationBanner();" style="background:none; border:none; color:white; cursor:pointer; font-size:14px;">✕</button>
+      </div>
+
       <!-- HEADER -->
       <div class="chat-header">
         <div class="header-left" id="header-user-clickable" onclick="handleHeaderTitleClick()">
@@ -956,6 +988,23 @@
     let localStream = null;
     let currentCallType = 'voice';
     let callState = 'idle'; // idle, calling, ringing, connected
+    let knownMessageIds = new Set();
+    let bannerPeerUsername = null;
+
+    function getLastReadTime(peerUsername) {
+      if (!currentUser) return 0;
+      const key = `chat_last_read_${currentUser.username.toLowerCase()}`;
+      const data = JSON.parse(localStorage.getItem(key) || '{}');
+      return data[peerUsername.toLowerCase()] || 0;
+    }
+
+    function setLastReadTime(peerUsername) {
+      if (!currentUser || !peerUsername) return;
+      const key = `chat_last_read_${currentUser.username.toLowerCase()}`;
+      const data = JSON.parse(localStorage.getItem(key) || '{}');
+      data[peerUsername.toLowerCase()] = Date.now();
+      localStorage.setItem(key, JSON.stringify(data));
+    }
 
     // Simple SHA-256 password hash helper
     async function hashPassword(str) {
@@ -1062,11 +1111,9 @@
       e.preventDefault();
       showAuthError('');
       const usernameInput = document.getElementById('signup-username').value.trim().toLowerCase();
-      const displayNameInput = document.getElementById('signup-displayname').value.trim();
       const passwordInput = document.getElementById('signup-password').value;
-      const bioInput = document.getElementById('signup-bio').value.trim();
 
-      if (!usernameInput || !displayNameInput || !passwordInput) {
+      if (!usernameInput || !passwordInput) {
         return showAuthError('All required fields must be filled.');
       }
 
@@ -1082,10 +1129,10 @@
       const passHash = await hashPassword(passwordInput);
       const newUser = {
         username: usernameInput,
-        displayName: displayNameInput,
+        displayName: usernameInput,
         passwordHash: passHash,
         avatar: 'logo.jpg',
-        bio: bioInput || 'Hey there! I am using FIRE-TECH PRIVATE CHAT.',
+        bio: 'Hey there! I am using FIRE-TECH PRIVATE CHAT.',
         createdAt: new Date().toISOString()
       };
 
@@ -1109,11 +1156,82 @@
       document.getElementById('chat-screen').classList.remove('hidden');
       showConversationsList();
 
+      backgroundSync();
       if (pollInterval) clearInterval(pollInterval);
-      pollInterval = setInterval(syncActiveChat, 2500);
+      pollInterval = setInterval(backgroundSync, 5000);
 
       if (callPollInterval) clearInterval(callPollInterval);
       callPollInterval = setInterval(pollCallSignals, 2000);
+    }
+
+    async function backgroundSync() {
+      if (!currentUser) return;
+
+      if (activePeer) {
+        setLastReadTime(activePeer.username);
+        await syncActiveChat();
+      }
+
+      await loadConversationsList();
+      await checkForNewMessageNotifications();
+    }
+
+    async function checkForNewMessageNotifications() {
+      if (!currentUser) return;
+      const users = (await kvGet('users_db')) || [];
+      const otherUsers = users.filter(u => u.username.toLowerCase() !== currentUser.username.toLowerCase());
+
+      let latestNewMsg = null;
+      let latestNewPeer = null;
+
+      for (const u of otherUsers) {
+        const convKey = getConversationKey(currentUser.username, u.username);
+        const msgs = (await kvGet(convKey)) || [];
+        const lastRead = getLastReadTime(u.username);
+
+        for (const m of msgs) {
+          if (m.sender.toLowerCase() === u.username.toLowerCase()) {
+            const msgTime = new Date(m.timestamp).getTime();
+            if (msgTime > lastRead && !knownMessageIds.has(m.id)) {
+              knownMessageIds.add(m.id);
+              if (activePeer && activePeer.username.toLowerCase() === u.username.toLowerCase()) {
+                setLastReadTime(u.username);
+              } else {
+                latestNewMsg = m;
+                latestNewPeer = u;
+              }
+            } else {
+              knownMessageIds.add(m.id);
+            }
+          }
+        }
+      }
+
+      if (latestNewMsg && latestNewPeer) {
+        showNotificationBanner(latestNewPeer, latestNewMsg.text);
+      }
+    }
+
+    function showNotificationBanner(peer, text) {
+      bannerPeerUsername = peer.username;
+      const bannerEl = document.getElementById('notification-banner');
+      const textEl = document.getElementById('notification-text');
+      textEl.innerText = `💬 @${peer.displayName}: ${text}`;
+      bannerEl.classList.remove('hidden');
+    }
+
+    function hideNotificationBanner() {
+      const bannerEl = document.getElementById('notification-banner');
+      bannerEl.classList.add('hidden');
+      bannerPeerUsername = null;
+    }
+
+    function handleBannerClick() {
+      if (bannerPeerUsername) {
+        const target = bannerPeerUsername;
+        hideNotificationBanner();
+        open1on1Chat(target);
+      }
     }
 
     // Logout
@@ -1173,6 +1291,9 @@
         const lastMsg = msgs.length > 0 ? msgs[msgs.length - 1].text : 'No messages yet';
         const timeStr = msgs.length > 0 ? new Date(msgs[msgs.length - 1].timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' }) : '';
 
+        const lastRead = getLastReadTime(u.username);
+        const unreadCount = msgs.filter(m => m.sender.toLowerCase() === u.username.toLowerCase() && new Date(m.timestamp).getTime() > lastRead).length;
+
         html += `
           <div class="chat-item" onclick="open1on1Chat('${u.username}')">
             <img src="${u.avatar || 'logo.jpg'}" class="chat-item-avatar" alt="Avatar">
@@ -1183,6 +1304,7 @@
               </div>
               <div class="chat-item-lastmsg">@${u.username} • ${escapeHtml(lastMsg)}</div>
             </div>
+            ${unreadCount > 0 ? `<span class="unread-badge">${unreadCount}</span>` : ''}
           </div>
         `;
       }
@@ -1206,6 +1328,11 @@
       if (!peer) return;
 
       activePeer = peer;
+      setLastReadTime(peer.username);
+      if (bannerPeerUsername && bannerPeerUsername.toLowerCase() === peer.username.toLowerCase()) {
+        hideNotificationBanner();
+      }
+
       document.getElementById('conversations-sidebar').classList.add('hidden-sidebar');
       document.getElementById('header-title').innerText = peer.displayName;
       document.getElementById('header-subtitle').innerText = `@${peer.username} • Click to view profile`;
@@ -1405,6 +1532,7 @@
       messages.push(newMsg);
       await kvPut(convKey, messages);
 
+      setLastReadTime(activePeer.username);
       inputEl.value = '';
       cancelAttachedImage();
       cancelReply();
