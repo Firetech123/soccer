@@ -1049,6 +1049,18 @@
     </div>
   </div>
 
+  <!-- DELETE CONFIRMATION MODAL BAR -->
+  <div id="delete-confirm-modal" class="modal-backdrop hidden">
+    <div style="background: white; border-radius: 12px; padding: 20px; text-align: center; width: 85%; max-width: 320px; box-shadow: 0 8px 32px rgba(0,0,0,0.3);">
+      <h3 style="font-size: 16px; font-weight: 700; margin-bottom: 8px; color: var(--text-main);">Delete Chat</h3>
+      <p id="delete-confirm-text" style="font-size: 13px; color: var(--text-muted); margin-bottom: 16px;">Are you sure you want to delete this chat and profile?</p>
+      <div style="display: flex; gap: 10px;">
+        <button type="button" class="btn" style="flex: 1; background: #e4e6eb; color: var(--text-main);" onclick="closeDeleteConfirmModal(false)">No</button>
+        <button type="button" class="btn primary-btn" style="flex: 1; background: var(--error);" onclick="closeDeleteConfirmModal(true)">Yes</button>
+      </div>
+    </div>
+  </div>
+
   <!-- MY PROFILE MODAL -->
   <div id="my-profile-modal" class="modal-backdrop hidden">
     <div class="modal-card">
@@ -1119,6 +1131,89 @@
     let callState = 'idle'; // idle, calling, ringing, connected
     let knownMessageIds = new Set();
     let bannerPeerUsername = null;
+    let pendingDeleteUsername = null;
+
+    function getDeletedChats() {
+      if (!currentUser) return [];
+      const key = `deleted_chats_${currentUser.username.toLowerCase()}`;
+      return JSON.parse(localStorage.getItem(key) || '[]');
+    }
+
+    function addDeletedChat(peerUsername) {
+      if (!currentUser || !peerUsername) return;
+      const deleted = getDeletedChats();
+      const target = peerUsername.toLowerCase();
+      if (!deleted.includes(target)) {
+        deleted.push(target);
+        const key = `deleted_chats_${currentUser.username.toLowerCase()}`;
+        localStorage.setItem(key, JSON.stringify(deleted));
+      }
+    }
+
+    function removeDeletedChat(peerUsername) {
+      if (!currentUser || !peerUsername) return;
+      let deleted = getDeletedChats();
+      const target = peerUsername.toLowerCase();
+      deleted = deleted.filter(u => u !== target);
+      const key = `deleted_chats_${currentUser.username.toLowerCase()}`;
+      localStorage.setItem(key, JSON.stringify(deleted));
+    }
+
+    function promptDeleteChat(peerUsername, displayName) {
+      pendingDeleteUsername = peerUsername;
+      const textEl = document.getElementById('delete-confirm-text');
+      if (textEl) {
+        textEl.innerText = `Are you sure you want to delete chat and profile of @${peerUsername} (${displayName})?`;
+      }
+      document.getElementById('delete-confirm-modal').classList.remove('hidden');
+    }
+
+    async function closeDeleteConfirmModal(confirmed) {
+      document.getElementById('delete-confirm-modal').classList.add('hidden');
+      if (confirmed && pendingDeleteUsername) {
+        addDeletedChat(pendingDeleteUsername);
+        if (activePeer && activePeer.username.toLowerCase() === pendingDeleteUsername.toLowerCase()) {
+          showConversationsList();
+        } else {
+          loadConversationsList();
+        }
+      }
+      pendingDeleteUsername = null;
+    }
+
+    let longPressTimer = null;
+    let isLongPress = false;
+    let isTouchMode = false;
+
+    function handleChatTouchStart(e, peerUsername, displayName) {
+      if (e.type === 'touchstart') {
+        isTouchMode = true;
+      } else if (e.type === 'mousedown' && isTouchMode) {
+        return; // Ignore synthetic mouse events on touch devices
+      }
+
+      isLongPress = false;
+      if (longPressTimer) clearTimeout(longPressTimer);
+      longPressTimer = setTimeout(() => {
+        isLongPress = true;
+        promptDeleteChat(peerUsername, displayName);
+      }, 600);
+    }
+
+    function handleChatTouchEnd(e) {
+      if (longPressTimer) clearTimeout(longPressTimer);
+      if (e && e.type === 'touchend') {
+        setTimeout(() => { isTouchMode = false; }, 500);
+      }
+    }
+
+    function handleChatClick(e, peerUsername, displayName) {
+      if (isLongPress) {
+        isLongPress = false;
+        return;
+      }
+      open1on1Chat(peerUsername);
+    }
 
     function getLastReadTime(peerUsername) {
       if (!currentUser) return 0;
@@ -1380,6 +1475,9 @@
             const msgTime = new Date(m.timestamp).getTime();
             if (msgTime > lastRead && !knownMessageIds.has(m.id)) {
               knownMessageIds.add(m.id);
+              // If deleted chat receives a new message, restore/unhide it automatically
+              removeDeletedChat(u.username);
+
               if (activePeer && activePeer.username.toLowerCase() === u.username.toLowerCase() && currentNavTab === 'chats') {
                 setLastReadTime(u.username);
               } else {
@@ -1464,8 +1562,15 @@
       const users = (await kvGet('users_db')) || [];
       const query = document.getElementById('user-search-input').value.trim().toLowerCase();
 
+      const deletedList = getDeletedChats();
+
       const otherUsers = users.filter(u => u.username.toLowerCase() !== currentUser.username.toLowerCase());
-      const filtered = otherUsers.filter(u => !query || u.username.toLowerCase().includes(query) || u.displayName.toLowerCase().includes(query));
+      const filtered = otherUsers.filter(u => {
+        if (!query && deletedList.includes(u.username.toLowerCase())) {
+          return false;
+        }
+        return !query || u.username.toLowerCase().includes(query) || u.displayName.toLowerCase().includes(query);
+      });
 
       if (filtered.length === 0) {
         listEl.innerHTML = '<div style="padding: 20px; text-align: center; color: #888; font-size: 13px;">No users found</div>';
@@ -1482,8 +1587,17 @@
         const lastRead = getLastReadTime(u.username);
         const unreadCount = msgs.filter(m => m.sender.toLowerCase() === u.username.toLowerCase() && new Date(m.timestamp).getTime() > lastRead).length;
 
+        const uNameEsc = escapeHtml(u.username).replace(/'/g, "\\'");
+        const dNameEsc = escapeHtml(u.displayName).replace(/'/g, "\\'");
+
         html += `
-          <div class="chat-item" onclick="open1on1Chat('${u.username}')">
+          <div class="chat-item"
+               onmousedown="handleChatTouchStart(event, '${uNameEsc}', '${dNameEsc}')"
+               onmouseup="handleChatTouchEnd(event)"
+               onmouseleave="handleChatTouchEnd(event)"
+               ontouchstart="handleChatTouchStart(event, '${uNameEsc}', '${dNameEsc}')"
+               ontouchend="handleChatTouchEnd(event)"
+               onclick="handleChatClick(event, '${uNameEsc}', '${dNameEsc}')">
             <img src="${u.avatar || 'logo.jpg'}" class="chat-item-avatar" alt="Avatar">
             <div class="chat-item-details">
               <div class="chat-item-top">
