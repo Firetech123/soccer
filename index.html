@@ -329,11 +329,74 @@
       background-color: #f5f5f5;
     }
 
+    /* Tab Content Pages */
+    .tab-content-wrapper {
+      flex: 1;
+      position: relative;
+      overflow: hidden;
+      display: flex;
+      flex-direction: column;
+    }
+
+    .tab-page {
+      width: 100%;
+      height: 100%;
+      display: flex;
+      flex-direction: column;
+      position: absolute;
+      top: 0;
+      left: 0;
+      overflow: hidden;
+      background: #ffffff;
+    }
+
+    .tab-page.hidden {
+      display: none !important;
+    }
+
+    /* Bottom Navigation Bar */
+    .bottom-nav {
+      display: flex;
+      justify-content: space-around;
+      align-items: center;
+      background-color: #ffffff;
+      border-top: 1px solid var(--card-border);
+      height: 56px;
+      min-height: 56px;
+      z-index: 100;
+    }
+
+    .nav-item {
+      flex: 1;
+      display: flex;
+      flex-direction: column;
+      align-items: center;
+      justify-content: center;
+      background: none;
+      border: none;
+      color: var(--text-muted);
+      font-size: 10px;
+      font-weight: 500;
+      cursor: pointer;
+      padding: 4px 0;
+      gap: 2px;
+      transition: color 0.2s;
+    }
+
+    .nav-item .nav-icon {
+      font-size: 18px;
+    }
+
+    .nav-item.active {
+      color: #075e54;
+      font-weight: 700;
+    }
+
     /* Direct Messaging Views */
     .chat-body-wrapper {
       display: flex;
       flex: 1;
-      height: calc(100% - 58px);
+      height: 100%;
       position: relative;
       overflow: hidden;
     }
@@ -498,13 +561,6 @@
       float: right;
       margin-left: 8px;
       margin-top: 4px;
-    }
-
-    .msg-edited-tag {
-      font-size: 10px;
-      font-style: italic;
-      color: #888;
-      margin-right: 4px;
     }
 
     .msg-img {
@@ -852,46 +908,117 @@
         </div>
       </div>
 
-      <!-- CHAT BODY WRAPPER -->
-      <div class="chat-body-wrapper">
-        <!-- CONVERSATIONS & SEARCH DRAWER -->
-        <div id="conversations-sidebar" class="conversations-sidebar">
-          <div class="search-box-container">
-            <input type="text" id="user-search-input" class="search-input" placeholder="🔍 Search username or name..." oninput="handleSearchUsers()">
-          </div>
-          <div id="chats-list" class="chats-list">
-            <!-- User search or active conversation items -->
-          </div>
-        </div>
-
-        <!-- ACTIVE 1-ON-1 DIRECT MESSAGE VIEW -->
-        <div id="active-dm-view" class="active-dm-view">
-          <div class="chat-messages" id="chat-messages">
-            <!-- Dynamic Messages -->
-          </div>
-
-          <!-- Image Attachment Preview Bar -->
-          <div id="image-preview-bar" style="padding: 6px 12px; background: #e0e0e0; display: flex; align-items: center; justify-content: space-between;" class="hidden">
-            <span id="image-preview-name" style="font-size: 12px;">Image attached</span>
-            <button type="button" onclick="cancelAttachedImage()" style="background:none; border:none; cursor:pointer;">❌</button>
-          </div>
-
-          <!-- Reply Bar -->
-          <div id="reply-preview-bar" style="padding: 6px 12px; background: #e6f2ff; border-left: 3px solid var(--primary); display: flex; align-items: center; justify-content: space-between;" class="hidden">
-            <div style="font-size: 12px;">
-              <strong id="reply-preview-sender">Replying</strong>: <span id="reply-preview-text"></span>
+      <!-- MAIN TAB CONTENT AREA -->
+      <div class="tab-content-wrapper">
+        <!-- TAB 1: CHATS -->
+        <div id="tab-content-chats" class="tab-page">
+          <div class="chat-body-wrapper">
+            <!-- CONVERSATIONS & SEARCH DRAWER -->
+            <div id="conversations-sidebar" class="conversations-sidebar">
+              <div class="search-box-container">
+                <input type="text" id="user-search-input" class="search-input" placeholder="🔍 Search username or name..." oninput="handleSearchUsers()">
+              </div>
+              <div id="chats-list" class="chats-list">
+                <!-- User search or active conversation items -->
+              </div>
             </div>
-            <button type="button" onclick="cancelReply()" style="background:none; border:none; cursor:pointer;">❌</button>
-          </div>
 
-          <!-- INPUT FORM -->
-          <form id="chat-form" class="chat-input-area" onsubmit="handleSendMessage(event)">
-            <input type="file" id="image-file-input" accept="image/*" class="hidden" onchange="handleImageSelected(event)">
-            <button type="button" class="icon-btn" style="color: #666;" onclick="document.getElementById('image-file-input').click()" title="Attach Photo">📷</button>
-            <input type="text" id="message-input" placeholder="Type a message..." autocomplete="off">
-            <button type="submit" class="send-btn-icon">➤</button>
-          </form>
+            <!-- ACTIVE 1-ON-1 DIRECT MESSAGE VIEW -->
+            <div id="active-dm-view" class="active-dm-view">
+              <div class="chat-messages" id="chat-messages">
+                <!-- Dynamic Messages -->
+              </div>
+
+              <!-- Image Attachment Preview Bar -->
+              <div id="image-preview-bar" style="padding: 6px 12px; background: #e0e0e0; display: flex; align-items: center; justify-content: space-between;" class="hidden">
+                <span id="image-preview-name" style="font-size: 12px;">Image attached</span>
+                <button type="button" onclick="cancelAttachedImage()" style="background:none; border:none; cursor:pointer;">❌</button>
+              </div>
+
+              <!-- Reply Bar -->
+              <div id="reply-preview-bar" style="padding: 6px 12px; background: #e6f2ff; border-left: 3px solid var(--primary); display: flex; align-items: center; justify-content: space-between;" class="hidden">
+                <div style="font-size: 12px;">
+                  <strong id="reply-preview-sender">Replying</strong>: <span id="reply-preview-text"></span>
+                </div>
+                <button type="button" onclick="cancelReply()" style="background:none; border:none; cursor:pointer;">❌</button>
+              </div>
+
+              <!-- INPUT FORM -->
+              <form id="chat-form" class="chat-input-area" onsubmit="handleSendMessage(event)">
+                <input type="file" id="image-file-input" accept="image/*" class="hidden" onchange="handleImageSelected(event)">
+                <button type="button" class="icon-btn" style="color: #666;" onclick="document.getElementById('image-file-input').click()" title="Attach Photo">📷</button>
+                <input type="text" id="message-input" placeholder="Type a message..." autocomplete="off">
+                <button type="submit" class="send-btn-icon">➤</button>
+              </form>
+            </div>
+          </div>
         </div>
+
+        <!-- TAB 2: FRIENDS -->
+        <div id="tab-content-friends" class="tab-page hidden">
+          <div class="search-box-container">
+            <input type="text" id="friends-search-input" class="search-input" placeholder="🔍 Search registered users..." oninput="renderFriendsList()">
+          </div>
+          <div id="friends-list" class="chats-list">
+            <!-- Registered users list -->
+          </div>
+        </div>
+
+        <!-- TAB 3: NOTIFICATIONS -->
+        <div id="tab-content-notifications" class="tab-page hidden">
+          <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; height: 100%; padding: 40px 20px; text-align: center; color: var(--text-muted);">
+            <div style="font-size: 48px; margin-bottom: 12px;">🔔</div>
+            <h3 style="font-size: 16px; font-weight: 600; color: var(--text-main); margin-bottom: 6px;">No notifications yet</h3>
+            <p style="font-size: 13px;">You're all caught up! New alerts and notifications will appear here.</p>
+          </div>
+        </div>
+
+        <!-- TAB 4: CALLS -->
+        <div id="tab-content-calls" class="tab-page hidden">
+          <div id="calls-list" class="chats-list">
+            <!-- Calls list -->
+          </div>
+        </div>
+
+        <!-- TAB 5: PROFILE -->
+        <div id="tab-content-profile" class="tab-page hidden" style="padding: 24px 20px; overflow-y: auto;">
+          <div style="display: flex; flex-direction: column; align-items: center; text-align: center;">
+            <img id="profile-tab-avatar" src="logo.jpg" class="profile-avatar-large" alt="Profile Avatar" style="margin-bottom: 12px;">
+            <h2 id="profile-tab-displayname" style="font-size: 20px; font-weight: 700; color: var(--text-main);">Display Name</h2>
+            <div id="profile-tab-username" style="font-size: 13px; color: var(--text-muted); margin-bottom: 12px;">@username</div>
+            <div id="profile-tab-bio" class="profile-bio" style="width: 100%; max-width: 300px;">Bio...</div>
+
+            <div style="width: 100%; max-width: 300px; display: flex; flex-direction: column; gap: 10px; margin-top: 10px;">
+              <button type="button" class="btn primary-btn" onclick="openMyProfileModal()">✏️ Edit Profile</button>
+              <button type="button" class="btn" style="background: #e4e6eb; color: var(--text-main);" onclick="openSecurityModal()">🔒 Change Password</button>
+              <button type="button" class="btn" style="background: var(--error-bg); color: var(--error);" onclick="handleLogout()">🚪 Log Out</button>
+            </div>
+          </div>
+        </div>
+      </div>
+
+      <!-- BOTTOM NAVIGATION BAR -->
+      <div class="bottom-nav">
+        <button type="button" class="nav-item active" id="nav-btn-chats" onclick="switchNavTab('chats')">
+          <span class="nav-icon">💬</span>
+          <span>Chats</span>
+        </button>
+        <button type="button" class="nav-item" id="nav-btn-friends" onclick="switchNavTab('friends')">
+          <span class="nav-icon">👥</span>
+          <span>Friends</span>
+        </button>
+        <button type="button" class="nav-item" id="nav-btn-notifications" onclick="switchNavTab('notifications')">
+          <span class="nav-icon">🔔</span>
+          <span>Notifications</span>
+        </button>
+        <button type="button" class="nav-item" id="nav-btn-calls" onclick="switchNavTab('calls')">
+          <span class="nav-icon">📞</span>
+          <span>Calls</span>
+        </button>
+        <button type="button" class="nav-item" id="nav-btn-profile" onclick="switchNavTab('profile')">
+          <span class="nav-icon">👤</span>
+          <span>Profile</span>
+        </button>
       </div>
 
       <!-- CALL OVERLAY MODAL -->
@@ -980,6 +1107,8 @@
     // State
     let currentUser = null; // { username, displayName, avatar, bio }
     let activePeer = null; // { username, displayName, avatar, bio }
+    let currentNavTab = 'chats';
+    let currentCallPeerUsername = null;
     let attachedImageBase64 = null;
     let replyToMsg = null;
     let pollInterval = null;
@@ -1154,7 +1283,7 @@
     function showMainChatScreen() {
       document.getElementById('auth-screen').classList.add('hidden');
       document.getElementById('chat-screen').classList.remove('hidden');
-      showConversationsList();
+      switchNavTab('chats');
 
       backgroundSync();
       if (pollInterval) clearInterval(pollInterval);
@@ -1164,15 +1293,72 @@
       callPollInterval = setInterval(pollCallSignals, 2000);
     }
 
+    // Navigation Tab Switching
+    function switchNavTab(tabName) {
+      currentNavTab = tabName;
+
+      ['chats', 'friends', 'notifications', 'calls', 'profile'].forEach(t => {
+        const page = document.getElementById(`tab-content-${t}`);
+        const navBtn = document.getElementById(`nav-btn-${t}`);
+        if (page) page.classList.toggle('hidden', t !== tabName);
+        if (navBtn) navBtn.classList.toggle('active', t === tabName);
+      });
+
+      if (tabName === 'chats') {
+        if (activePeer) {
+          document.getElementById('header-title').innerText = activePeer.displayName;
+          document.getElementById('header-subtitle').innerText = `@${activePeer.username} • Click to view profile`;
+          document.getElementById('header-avatar').src = activePeer.avatar || 'logo.jpg';
+          document.getElementById('back-to-list-btn').classList.remove('hidden');
+          document.getElementById('start-voice-btn').classList.remove('hidden');
+          document.getElementById('start-video-btn').classList.remove('hidden');
+        } else {
+          showConversationsList();
+        }
+      } else {
+        document.getElementById('back-to-list-btn').classList.add('hidden');
+        document.getElementById('start-voice-btn').classList.add('hidden');
+        document.getElementById('start-video-btn').classList.add('hidden');
+      }
+
+      if (tabName === 'friends') {
+        document.getElementById('header-title').innerText = 'Friends';
+        document.getElementById('header-subtitle').innerText = 'All registered users';
+        document.getElementById('header-avatar').src = currentUser ? (currentUser.avatar || 'logo.jpg') : 'logo.jpg';
+        renderFriendsList();
+      } else if (tabName === 'notifications') {
+        document.getElementById('header-title').innerText = 'Notifications';
+        document.getElementById('header-subtitle').innerText = 'Recent alerts';
+        document.getElementById('header-avatar').src = currentUser ? (currentUser.avatar || 'logo.jpg') : 'logo.jpg';
+      } else if (tabName === 'calls') {
+        document.getElementById('header-title').innerText = 'Calls';
+        document.getElementById('header-subtitle').innerText = 'Call history (24h)';
+        document.getElementById('header-avatar').src = currentUser ? (currentUser.avatar || 'logo.jpg') : 'logo.jpg';
+        renderCallsList();
+      } else if (tabName === 'profile') {
+        document.getElementById('header-title').innerText = 'My Profile';
+        document.getElementById('header-subtitle').innerText = 'Account details';
+        document.getElementById('header-avatar').src = currentUser ? (currentUser.avatar || 'logo.jpg') : 'logo.jpg';
+        renderProfileTab();
+      }
+    }
+
     async function backgroundSync() {
       if (!currentUser) return;
 
-      if (activePeer) {
+      if (activePeer && currentNavTab === 'chats') {
         setLastReadTime(activePeer.username);
         await syncActiveChat();
       }
 
-      await loadConversationsList();
+      if (currentNavTab === 'chats') {
+        await loadConversationsList();
+      } else if (currentNavTab === 'friends') {
+        await renderFriendsList();
+      } else if (currentNavTab === 'calls') {
+        await renderCallsList();
+      }
+
       await checkForNewMessageNotifications();
     }
 
@@ -1194,7 +1380,7 @@
             const msgTime = new Date(m.timestamp).getTime();
             if (msgTime > lastRead && !knownMessageIds.has(m.id)) {
               knownMessageIds.add(m.id);
-              if (activePeer && activePeer.username.toLowerCase() === u.username.toLowerCase()) {
+              if (activePeer && activePeer.username.toLowerCase() === u.username.toLowerCase() && currentNavTab === 'chats') {
                 setLastReadTime(u.username);
               } else {
                 latestNewMsg = m;
@@ -1230,6 +1416,7 @@
       if (bannerPeerUsername) {
         const target = bannerPeerUsername;
         hideNotificationBanner();
+        switchNavTab('chats');
         open1on1Chat(target);
       }
     }
@@ -1273,6 +1460,7 @@
 
     async function loadConversationsList() {
       const listEl = document.getElementById('chats-list');
+      if (!listEl) return;
       const users = (await kvGet('users_db')) || [];
       const query = document.getElementById('user-search-input').value.trim().toLowerCase();
 
@@ -1316,6 +1504,145 @@
       loadConversationsList();
     }
 
+    // Friends Tab List
+    async function renderFriendsList() {
+      const listEl = document.getElementById('friends-list');
+      if (!listEl) return;
+      const users = (await kvGet('users_db')) || [];
+      const queryInput = document.getElementById('friends-search-input');
+      const query = queryInput ? queryInput.value.trim().toLowerCase() : '';
+
+      const otherUsers = users.filter(u => u.username.toLowerCase() !== currentUser.username.toLowerCase());
+      const filtered = otherUsers.filter(u => !query || u.username.toLowerCase().includes(query) || u.displayName.toLowerCase().includes(query));
+
+      if (filtered.length === 0) {
+        listEl.innerHTML = '<div style="padding: 20px; text-align: center; color: #888; font-size: 13px;">No registered users found</div>';
+        return;
+      }
+
+      let html = '';
+      for (const u of filtered) {
+        html += `
+          <div class="chat-item" onclick="viewUserProfile('${u.username}')">
+            <img src="${u.avatar || 'logo.jpg'}" class="chat-item-avatar" alt="Avatar">
+            <div class="chat-item-details">
+              <div class="chat-item-top">
+                <span class="chat-item-name">${escapeHtml(u.displayName)}</span>
+              </div>
+              <div class="chat-item-lastmsg">@${u.username} • ${escapeHtml(u.bio || 'Hey there! I am using FIRE-TECH PRIVATE CHAT.')}</div>
+            </div>
+            <button type="button" class="btn primary-btn" style="width: auto; padding: 6px 12px; font-size: 12px;" onclick="event.stopPropagation(); switchNavTab('chats'); open1on1Chat('${u.username}');">Chat</button>
+          </div>
+        `;
+      }
+      listEl.innerHTML = html;
+    }
+
+    // Calls Tab History
+    async function renderCallsList() {
+      const listEl = document.getElementById('calls-list');
+      if (!listEl) return;
+
+      const calls = (await kvGet('calls_db')) || [];
+      const users = (await kvGet('users_db')) || [];
+      const now = Date.now();
+      const RETENTION = 24 * 60 * 60 * 1000;
+
+      // Filter 24h old calls
+      const validCalls = calls.filter(c => (now - c.timestamp) < RETENTION);
+
+      // Filter calls involving currentUser
+      const myCalls = validCalls.filter(c =>
+        c.caller.toLowerCase() === currentUser.username.toLowerCase() ||
+        c.receiver.toLowerCase() === currentUser.username.toLowerCase()
+      );
+
+      // Sort by newest first
+      myCalls.sort((a, b) => b.timestamp - a.timestamp);
+
+      if (myCalls.length === 0) {
+        listEl.innerHTML = '<div style="padding: 20px; text-align: center; color: #888; font-size: 13px;">No recent calls in the last 24 hours</div>';
+        return;
+      }
+
+      let html = '';
+      for (const c of myCalls) {
+        const isCaller = c.caller.toLowerCase() === currentUser.username.toLowerCase();
+        const otherUsername = isCaller ? c.receiver : c.caller;
+        const peer = users.find(u => u.username.toLowerCase() === otherUsername.toLowerCase()) || { displayName: otherUsername, avatar: 'logo.jpg' };
+
+        let statusText = '';
+        let statusIcon = '';
+        let statusColor = '';
+
+        if (isCaller) {
+          statusText = 'Outgoing';
+          statusIcon = '↗️';
+          statusColor = '#0084ff';
+        } else if (c.status === 'answered') {
+          statusText = 'Answered';
+          statusIcon = '↙️';
+          statusColor = '#25d366';
+        } else {
+          statusText = 'Missed';
+          statusIcon = '↙️';
+          statusColor = '#fa383e';
+        }
+
+        const timeStr = new Date(c.timestamp).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' });
+        const callIcon = c.type === 'video' ? '📹' : '📞';
+
+        html += `
+          <div class="chat-item" onclick="viewUserProfile('${otherUsername}')">
+            <img src="${peer.avatar || 'logo.jpg'}" class="chat-item-avatar" alt="Avatar">
+            <div class="chat-item-details">
+              <div class="chat-item-top">
+                <span class="chat-item-name">${escapeHtml(peer.displayName)}</span>
+                <span class="chat-item-time">${timeStr}</span>
+              </div>
+              <div class="chat-item-lastmsg" style="color: ${statusColor}; font-weight: 500;">
+                ${statusIcon} ${statusText} (${c.type})
+              </div>
+            </div>
+            <button type="button" class="icon-btn" style="color: #075e54; font-size: 20px;" onclick="event.stopPropagation(); switchNavTab('chats'); open1on1Chat('${otherUsername}'); startCall('${c.type}');" title="Call Back">
+              ${callIcon}
+            </button>
+          </div>
+        `;
+      }
+
+      listEl.innerHTML = html;
+    }
+
+    async function recordCallLog(callerUsername, receiverUsername, type, status) {
+      if (!callerUsername || !receiverUsername) return;
+      const calls = (await kvGet('calls_db')) || [];
+      const now = Date.now();
+      const RETENTION = 24 * 60 * 60 * 1000;
+      const updatedCalls = calls.filter(c => (now - c.timestamp) < RETENTION);
+
+      const newLog = {
+        id: Date.now().toString() + '_' + Math.random().toString(36).substr(2, 4),
+        caller: callerUsername,
+        receiver: receiverUsername,
+        type: type, // 'voice' or 'video'
+        status: status, // 'outgoing', 'answered', 'missed'
+        timestamp: now
+      };
+
+      updatedCalls.push(newLog);
+      await kvPut('calls_db', updatedCalls);
+    }
+
+    // Profile Tab View
+    function renderProfileTab() {
+      if (!currentUser) return;
+      document.getElementById('profile-tab-avatar').src = currentUser.avatar || 'logo.jpg';
+      document.getElementById('profile-tab-displayname').innerText = currentUser.displayName;
+      document.getElementById('profile-tab-username').innerText = `@${currentUser.username}`;
+      document.getElementById('profile-tab-bio').innerText = currentUser.bio || 'Hey there! I am using FIRE-TECH PRIVATE CHAT.';
+    }
+
     function getConversationKey(u1, u2) {
       const sorted = [u1.toLowerCase(), u2.toLowerCase()].sort();
       return `conversation_${sorted[0]}_${sorted[1]}`;
@@ -1346,7 +1673,7 @@
 
     // Header Title Click (View Profile if in 1-on-1 chat)
     function handleHeaderTitleClick() {
-      if (activePeer) {
+      if (activePeer && currentNavTab === 'chats') {
         viewUserProfile(activePeer.username);
       }
     }
@@ -1369,11 +1696,16 @@
         startBtn.style.display = 'block';
         startBtn.onclick = () => {
           closeModal('view-profile-modal');
+          switchNavTab('chats');
           open1on1Chat(user.username);
         };
       }
 
       document.getElementById('view-profile-modal').classList.remove('hidden');
+    }
+
+    function startDirectChatFromViewModal() {
+      // Helper assigned dynamically in viewUserProfile
     }
 
     // My Profile Modal & Editing
@@ -1416,7 +1748,9 @@
 
       localStorage.setItem('chat_auth_user', JSON.stringify(currentUser));
       closeModal('my-profile-modal');
-      if (!activePeer) {
+      if (currentNavTab === 'profile') {
+        renderProfileTab();
+      } else if (!activePeer) {
         showConversationsList();
       }
     }
@@ -1567,6 +1901,7 @@
       if (!activePeer) return;
       currentCallType = type;
       callState = 'calling';
+      currentCallPeerUsername = activePeer.username;
 
       document.getElementById('call-peer-name').innerText = activePeer.displayName;
       document.getElementById('call-peer-avatar').src = activePeer.avatar || 'logo.jpg';
@@ -1583,6 +1918,9 @@
         status: 'offered',
         timestamp: Date.now()
       });
+
+      // Record outgoing call log for caller
+      await recordCallLog(currentUser.username, activePeer.username, type, 'outgoing');
     }
 
     async function pollCallSignals() {
@@ -1594,6 +1932,7 @@
         if (callState === 'idle') {
           callState = 'ringing';
           currentCallType = signal.type;
+          currentCallPeerUsername = signal.from;
           const users = (await kvGet('users_db')) || [];
           const caller = users.find(u => u.username.toLowerCase() === signal.from.toLowerCase());
 
@@ -1611,9 +1950,18 @@
       callState = 'connected';
       document.getElementById('call-status-text').innerText = 'Connected';
       document.getElementById('call-accept-btn').classList.add('hidden');
+
+      if (currentCallPeerUsername) {
+        await recordCallLog(currentCallPeerUsername, currentUser.username, currentCallType, 'answered');
+      }
     }
 
     async function endCall() {
+      if (callState === 'ringing' && currentCallPeerUsername) {
+        // Record missed call log for receiver
+        await recordCallLog(currentCallPeerUsername, currentUser.username, currentCallType, 'missed');
+      }
+
       callState = 'idle';
       document.getElementById('call-overlay-modal').classList.add('hidden');
       if (currentUser) {
@@ -1622,6 +1970,7 @@
       if (activePeer) {
         await kvPut(`call_${activePeer.username.toLowerCase()}`, null);
       }
+      currentCallPeerUsername = null;
     }
 
     function minimizeCallModal() {
