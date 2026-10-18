@@ -1375,12 +1375,15 @@
     }
 
     // Show Main Screen after auth
-    function showMainChatScreen() {
+    async function showMainChatScreen() {
+      activePeer = null;
       document.getElementById('auth-screen').classList.add('hidden');
       document.getElementById('chat-screen').classList.remove('hidden');
       switchNavTab('chats');
 
+      await showConversationsList();
       backgroundSync();
+
       if (pollInterval) clearInterval(pollInterval);
       pollInterval = setInterval(backgroundSync, 5000);
 
